@@ -1,0 +1,2320 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulador de Ponto Cruz</title>
+<style>
+  :root {
+    --bg: #1c1e26;
+    --panel: #252833;
+    --panel-2: #2e313e;
+    --border: #3a3e4d;
+    --text: #e6e8ef;
+    --muted: #9aa0b4;
+    --accent: #7c9cff;
+    --accent-strong: #5b7cff;
+    --danger: #ff6b6b;
+    --fabric: #f3ede0;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  #app { display: flex; flex-direction: column; height: 100%; }
+
+  /* ---- Top bar ---- */
+  header {
+    display: flex; align-items: center; gap: 14px;
+    padding: 8px 14px; background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  header h1 {
+    font-size: 15px; font-weight: 600; margin: 0;
+    display: flex; align-items: center; gap: 8px; white-space: nowrap;
+  }
+  header h1 .logo { font-size: 18px; }
+  header h1 .brand {
+    font-size: 17px; font-weight: 800; letter-spacing: .3px;
+    background: linear-gradient(120deg, #7c9cff 0%, #ec407a 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .group {
+    display: flex; align-items: center; gap: 4px;
+    padding: 3px; background: var(--panel-2);
+    border: 1px solid var(--border); border-radius: 10px;
+  }
+  .group .label {
+    font-size: 10px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: .5px; padding: 0 6px; white-space: nowrap;
+  }
+  button.tool, button.plain {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    min-width: 34px; height: 32px; padding: 0 8px;
+    background: transparent; color: var(--text);
+    border: 1px solid transparent; border-radius: 7px;
+    font-size: 13px; cursor: pointer; transition: background .12s, border-color .12s;
+    white-space: nowrap;
+  }
+  button.tool svg, button.plain svg { pointer-events: none; }
+  button.tool:hover, button.plain:hover { background: var(--panel); }
+  button.tool.active {
+    background: var(--accent-strong); color: #fff;
+    box-shadow: 0 1px 0 rgba(0,0,0,.2) inset;
+  }
+  button.tool.disabled { opacity: .3; pointer-events: none; }
+  button.plain.subtle { color: var(--muted); }
+  button.plain.active { background: var(--accent-strong); color: #fff; }
+  .seg-toggle { padding: 3px; gap: 2px; }
+  .seg-btn {
+    height: 30px; padding: 0 12px; border-radius: 7px; border: 1px solid transparent;
+    background: transparent; color: var(--muted); font-size: 13px; cursor: pointer;
+    white-space: nowrap; transition: background .12s, color .12s;
+  }
+  .seg-btn:hover { color: var(--text); }
+  .seg-btn.active { background: var(--accent-strong); color: #fff; }
+  .spacer { flex: 1; }
+  .zoomval { font-size: 12px; color: var(--muted); min-width: 42px; text-align: center; }
+  button.plain.icon-only { width: 32px; min-width: 32px; padding: 0; }
+  button.plain.icon-only svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ---- Body ---- */
+  #body { display: flex; flex: 1; min-height: 0; }
+
+  /* ---- Vertical toolbar ---- */
+  #toolbar {
+    width: 40px; background: transparent;
+    display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 3px;
+    flex: 0 0 auto; position: relative; z-index: 5;
+  }
+  #toolbar button {
+    position: relative;
+    width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
+    background: transparent; border: 1px solid transparent; border-radius: 8px;
+    color: #cfd3e0; cursor: pointer; transition: background .12s, color .12s;
+  }
+  #toolbar button:hover { background: rgba(255,255,255,.08); color: #fff; }
+  #toolbar button::after {
+    content: attr(data-tip);
+    position: absolute; left: 42px; top: 50%; transform: translateY(-50%);
+    background: rgba(18,20,28,.97); color: var(--text); border: 1px solid var(--border);
+    padding: 4px 9px; border-radius: 6px; font-size: 12px; white-space: nowrap;
+    opacity: 0; pointer-events: none; transition: opacity .1s .05s; z-index: 60;
+    box-shadow: 0 4px 14px rgba(0,0,0,.4);
+  }
+  #toolbar button:hover::after { opacity: 1; }
+  #toolbar button.active { background: var(--accent-strong); color: #fff; }
+  #toolbar button.disabled { opacity: .28; pointer-events: none; }
+  #toolbar svg { width: 19px; height: 19px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  #toolbar .sep { width: 22px; height: 1px; background: var(--border); margin: 4px 0; }
+
+  /* ---- Left palette ---- */
+  aside {
+    width: 214px; background: var(--panel); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  .aside-section { padding: 12px; border-bottom: 1px solid var(--border); }
+  .palette-section { flex: 0 0 auto; height: 150px; display: flex; flex-direction: column; overflow: hidden; border-bottom: none; }
+  .palette-section .swatches { flex: 1; max-height: none; }
+  .stitch-section { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+  #paletteResizer { height: 8px; flex: 0 0 auto; cursor: row-resize; display: flex; align-items: center; justify-content: center; }
+  #paletteResizer::before { content: ""; width: 34px; height: 3px; border-radius: 2px; background: var(--border); }
+  #paletteResizer:hover::before { background: var(--accent-strong); }
+  #asideResizer { width: 5px; flex: 0 0 auto; cursor: col-resize; background: transparent; }
+  #asideResizer:hover { background: var(--accent-strong); }
+  .aside-section h2 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .6px;
+    color: var(--muted); margin: 0 0 8px;
+  }
+  .current-color { display: flex; align-items: center; gap: 10px; }
+  .current-swatch {
+    width: 40px; height: 40px; border-radius: 8px; flex: 0 0 auto;
+    border: 2px solid var(--border); box-shadow: 0 2px 6px rgba(0,0,0,.3);
+    position: relative; overflow: hidden; cursor: pointer;
+  }
+  .current-swatch.sm { width: 28px; height: 28px; box-shadow: none; }
+  .current-swatch input[type=color] {
+    position: absolute; inset: -6px; width: 150%; height: 150%;
+    padding: 0; border: none; background: none; cursor: pointer;
+  }
+  .hex-input {
+    flex: 1; min-width: 0; height: 34px; background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 7px; padding: 0 8px;
+    font-size: 13px; font-family: inherit; text-transform: uppercase; letter-spacing: .3px;
+  }
+  .bg-row { display: flex; align-items: center; gap: 10px; margin-top: 9px; }
+  .bg-label { font-size: 12px; color: var(--muted); }
+  .swatches {
+    display: grid; grid-template-columns: repeat(auto-fill, 28px); gap: 6px;
+    justify-content: start; align-content: start;
+    max-height: 180px; overflow-y: auto; padding-right: 2px;
+  }
+  .swatch {
+    width: 28px; height: 28px; border-radius: 6px; cursor: pointer;
+    border: 2px solid rgba(255,255,255,.12); position: relative;
+    transition: transform .08s;
+  }
+  .swatch:hover { transform: scale(1.08); }
+  .swatch.sel { border-color: #fff; box-shadow: 0 0 0 2px var(--accent-strong); }
+  .swatch .rm {
+    position: absolute; top: -6px; right: -6px; width: 16px; height: 16px;
+    background: var(--danger); color: #fff; border-radius: 50%; font-size: 11px;
+    line-height: 15px; text-align: center; display: none; cursor: pointer;
+  }
+  .swatch:hover .rm { display: block; }
+  .add-swatch {
+    display: flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border: 2px dashed var(--border); border-radius: 6px;
+    color: var(--muted); cursor: pointer; font-size: 18px;
+  }
+  .add-swatch:hover { color: var(--text); border-color: var(--accent); }
+
+  /* ---- Stitch type picker ---- */
+  .stitch-scroll { max-height: 300px; overflow-y: auto; }
+  .stitch-cat {
+    font-size: 9.5px; text-transform: uppercase; letter-spacing: .5px;
+    color: var(--muted); margin: 8px 2px 5px; opacity: .8;
+  }
+  .stitch-cat:first-child { margin-top: 0; }
+  .stitch-grid { display: grid; grid-template-columns: repeat(auto-fill, 62px); gap: 6px; justify-content: start; }
+  .stitch-opt {
+    width: 62px; display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 7px 3px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--panel-2); cursor: pointer; transition: border-color .12s, background .12s;
+  }
+  .stitch-opt:hover { border-color: var(--accent); }
+  .stitch-opt.active { border-color: var(--accent-strong); background: rgba(91,124,255,.15); }
+  .stitch-opt canvas { background: var(--fabric); border-radius: 4px; }
+  .stitch-opt span { font-size: 9px; color: var(--muted); text-align: center; line-height: 1.1; }
+  .stitch-opt.active span { color: var(--text); }
+
+  /* ---- Canvas area ---- */
+  main {
+    flex: 1; position: relative; overflow: hidden;
+    background:
+      linear-gradient(45deg, #20222c 25%, transparent 25%),
+      linear-gradient(-45deg, #20222c 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #20222c 75%),
+      linear-gradient(-45deg, transparent 75%, #20222c 75%);
+    background-size: 24px 24px;
+    background-position: 0 0, 0 12px, 12px -12px, -12px 0px;
+    background-color: #1a1c24;
+  }
+  #stage { position: absolute; inset: 0; overflow: auto; }
+  /* ---- Floating view controls (zoom + undo/redo) ---- */
+  #viewFab {
+    position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 2px; padding: 4px 6px;
+    background: rgba(37,40,51,0.97); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: 0 6px 20px rgba(0,0,0,.35); backdrop-filter: blur(6px); z-index: 30;
+  }
+  #viewFab button {
+    display: flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; border-radius: 8px; border: 1px solid transparent;
+    background: transparent; color: #cfd3e0; cursor: pointer; font-size: 16px;
+    transition: background .12s, color .12s;
+  }
+  #viewFab button:hover { background: rgba(255,255,255,.08); color: #fff; }
+  #viewFab svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  #viewFab .zoomval { font-size: 11px; color: var(--muted); min-width: 36px; text-align: center; }
+  #viewFab .vsep { width: 1px; height: 20px; background: var(--border); margin: 0 3px; flex: 0 0 auto; }
+  #canvasWrap { position: relative; width: max-content; margin: 40px auto; }
+  canvas#board {
+    display: block; box-shadow: 0 8px 40px rgba(0,0,0,.5);
+    border-radius: 4px; cursor: crosshair; touch-action: none;
+  }
+  .hint {
+    position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+    background: rgba(20,22,30,.85); backdrop-filter: blur(6px);
+    border: 1px solid var(--border); border-radius: 20px;
+    padding: 6px 14px; font-size: 12px; color: var(--muted);
+    pointer-events: none; white-space: nowrap; max-width: 92%; overflow: hidden; text-overflow: ellipsis;
+  }
+  .coords {
+    position: absolute; top: 10px; right: 14px;
+    background: rgba(20,22,30,.85); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; font-size: 12px; color: var(--muted);
+    font-variant-numeric: tabular-nums; pointer-events: none;
+  }
+
+  /* ---- Modal ---- */
+  .modal-bg {
+    position: fixed; inset: 0; background: rgba(0,0,0,.5);
+    display: none; align-items: center; justify-content: center; z-index: 50;
+  }
+  .modal-bg.show { display: flex; }
+  .modal {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    padding: 22px; width: 320px; box-shadow: 0 20px 60px rgba(0,0,0,.5);
+  }
+  .modal h3 { margin: 0 0 16px; font-size: 16px; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .field input[type=number], .field input[type=text] {
+    width: 100%; padding: 8px 10px; background: var(--panel-2);
+    border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 14px;
+  }
+  .field-row { display: flex; gap: 8px; }
+  .field-row input { flex: 1; min-width: 0; }
+  .projects-list { max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; margin: 4px 0 16px; }
+  .proj-empty { font-size: 12px; color: var(--muted); text-align: center; padding: 16px 0; }
+  .proj-row { display: flex; align-items: center; gap: 10px; padding: 6px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2); }
+  .proj-row img { width: 40px; height: 40px; object-fit: cover; border-radius: 5px; background: var(--fabric); flex: 0 0 auto; }
+  .proj-info { flex: 1; min-width: 0; }
+  .proj-name { font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .proj-date { font-size: 10.5px; color: var(--muted); }
+  .proj-open { height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--panel); color: var(--text); cursor: pointer; font-size: 11.5px; flex: 0 0 auto; }
+  .proj-open:hover { background: var(--accent-strong); border-color: var(--accent-strong); color: #fff; }
+  .proj-del { width: 28px; height: 28px; border-radius: 6px; border: 1px solid transparent; background: transparent; color: var(--danger); cursor: pointer; font-size: 13px; flex: 0 0 auto; }
+  .proj-del:hover { background: rgba(255,107,107,0.12); }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+  .btn-primary {
+    padding: 8px 16px; background: var(--accent-strong); color: #fff;
+    border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500;
+  }
+  .btn-ghost {
+    padding: 8px 16px; background: transparent; color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-size: 13px;
+  }
+  kbd {
+    background: var(--panel-2); border: 1px solid var(--border); border-bottom-width: 2px;
+    border-radius: 4px; padding: 1px 5px; font-size: 11px; font-family: inherit;
+  }
+  input[type=file] { display: none; }
+  #foldSel, #shapeKind {
+    height: 32px; background: var(--panel); color: var(--text);
+    border: 1px solid var(--border); border-radius: 7px; padding: 0 6px;
+    font-size: 12px; cursor: pointer;
+  }
+  /* alterna visibilidade por modo */
+  body[data-mode="bordado"] [data-for="crochet"],
+  body[data-mode="crochet"] [data-for="bordado"] { display: none !important; }
+  /* menu de visibilidade (ícone de olho) */
+  #visFab { position: absolute; top: 44px; right: 14px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; z-index: 30; }
+  #visToggle {
+    width: 34px; height: 34px; border-radius: 50%; cursor: pointer;
+    background: rgba(37,40,51,0.9); border: 1px solid var(--border); color: #cfd3e0;
+    display: flex; align-items: center; justify-content: center; box-shadow: 0 3px 10px rgba(0,0,0,.35);
+  }
+  #visToggle svg { width: 19px; height: 19px; stroke: currentColor; fill: none; stroke-width: 1.7; }
+  #visToggle:hover { color: #fff; }
+  #visToggle.active { background: var(--accent-strong); border-color: var(--accent-strong); color: #fff; }
+  #visPanel { display: none; flex-direction: column; gap: 2px; padding: 6px; min-width: 200px;
+    background: rgba(37,40,51,0.97); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+  #visPanel.show { display: flex; }
+  #visPanel button {
+    display: flex; align-items: center; gap: 9px; height: 32px; padding: 0 8px;
+    background: transparent; color: var(--text); border: 1px solid transparent; border-radius: 7px;
+    cursor: pointer; font-size: 12.5px; text-align: left;
+  }
+  #visPanel button:hover { background: var(--panel-2); }
+  #visPanel button svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.7; flex: 0 0 auto; }
+  #visPanel button.off { color: var(--muted); }
+  /* flyout de formas */
+  #shapeFlyout { position: fixed; display: none; gap: 4px; padding: 6px;
+    background: rgba(37,40,51,0.98); border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.45); z-index: 70; }
+  #shapeFlyout.show { display: flex; }
+  #shapeFlyout button {
+    width: 34px; height: 34px; border-radius: 8px; cursor: pointer; font-size: 17px;
+    background: transparent; border: 1px solid transparent; color: #e6e8ef;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #shapeFlyout button:hover { background: var(--panel-2); }
+  #shapeFlyout button.sel { background: var(--accent-strong); color: #fff; }
+  /* flyout de formatos de download */
+  #downloadFlyout { position: fixed; display: none; flex-direction: column; gap: 2px; padding: 6px;
+    background: rgba(37,40,51,0.98); border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.45); z-index: 70; min-width: 150px; }
+  #downloadFlyout.show { display: flex; }
+  #downloadFlyout button {
+    text-align: left; padding: 7px 10px; border-radius: 7px; border: 1px solid transparent;
+    background: transparent; color: var(--text); cursor: pointer; font-size: 13px;
+  }
+  #downloadFlyout button:hover { background: var(--panel-2); }
+
+  .obj-panel {
+    position: absolute; left: 12px; bottom: 12px; width: 210px;
+    background: rgba(37,40,51,0.97); border: 1px solid var(--border);
+    border-radius: 12px; padding: 12px; display: none;
+    box-shadow: 0 8px 30px rgba(0,0,0,.4); backdrop-filter: blur(6px);
+  }
+  .obj-panel.show { display: block; }
+  .obj-panel h4 { margin: 0 0 10px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .op-row { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+  .op-row label { font-size: 11px; color: var(--muted); width: 46px; flex: 0 0 auto; }
+  .op-row select, .op-row input[type=number] {
+    flex: 1; min-width: 0; height: 28px; background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px; padding: 0 6px; font-size: 12px;
+  }
+  .op-row input[type=range] { flex: 1; min-width: 0; }
+  .op-val { font-size: 11px; color: var(--muted); width: 26px; flex: 0 0 auto; text-align: right; font-variant-numeric: tabular-nums; }
+  .op-btns { display: flex; gap: 6px; margin-top: 4px; }
+  .op-btns button {
+    flex: 1; min-width: 0; height: 30px; border-radius: 7px; border: 1px solid var(--border);
+    background: var(--panel-2); color: var(--text); cursor: pointer; font-size: 12px; white-space: nowrap;
+  }
+  .op-btns button:hover { background: var(--panel); }
+  .op-btns button.danger { border-color: var(--danger); color: var(--danger); }
+  .op-row button.mini { flex: 1; min-width: 0; height: 26px; border-radius: 6px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); cursor: pointer; font-size: 11px; }
+  .op-row button.mini:hover { background: var(--panel); }
+  .op-pat { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 9px; }
+  .pat-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: 11px; padding: 2px 7px; font-size: 10px; }
+  .pat-chip b { cursor: pointer; color: var(--danger); font-weight: 700; }
+  .pat-empty { font-size: 10px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1><span class="logo">🧵</span><span class="brand">Dotê</span></h1>
+
+    <div class="group seg-toggle" id="modeToggle">
+      <button class="seg-btn" data-mode="bordado" title="Modo bordar">🧵 Bordar</button>
+      <button class="seg-btn" data-mode="crochet" title="Modo crochê">🧶 Crochê</button>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="group">
+      <button class="plain" id="newBtn" title="Novo projeto">＋ Novo</button>
+      <button class="plain" id="clearBtn" title="Limpar tudo">🧹 Limpar</button>
+    </div>
+
+    <div class="group">
+      <button class="plain icon-only" id="projectsBtn" title="Meus projetos"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg></button>
+      <button class="plain icon-only" id="importImgBtn" title="Importar imagem"><svg viewBox="0 0 24 24"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg></button>
+      <button class="plain icon-only" id="downloadTrigger" title="Baixar"><svg viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M6 13l6 6 6-6"/></svg></button>
+      <input type="file" id="imgInput" accept="image/*">
+    </div>
+  </header>
+
+  <div id="body">
+    <aside>
+      <div class="aside-section">
+        <h2>Cor atual</h2>
+        <div class="current-color">
+          <label class="current-swatch" id="currentSwatch" title="Escolher cor (gradiente, pipeta e hex)"><input type="color" id="colorPicker" value="#c0392b"></label>
+          <input type="text" id="hexInput" class="hex-input" value="#C0392B" maxlength="7" spellcheck="false">
+        </div>
+        <div class="bg-row">
+          <label class="current-swatch sm" id="bgSwatch" title="Cor de fundo do tecido"><input type="color" id="bgPicker" value="#f3ede0"></label>
+          <span class="bg-label">Fundo do tecido</span>
+        </div>
+        <input type="color" id="addColorPicker" style="display:none">
+      </div>
+      <div class="aside-section palette-section" id="paletteSection">
+        <h2>Paleta</h2>
+        <div class="swatches" id="swatches"></div>
+      </div>
+      <div id="paletteResizer" title="Arraste para dar mais espaço à paleta ou aos pontos"></div>
+      <div class="aside-section stitch-section">
+        <h2>Tipo de ponto</h2>
+        <div class="stitch-scroll" id="stitchScroll"></div>
+      </div>
+    </aside>
+    <div id="asideResizer" title="Arraste para ajustar a largura"></div>
+    <nav id="toolbar">
+      <button class="tool active" data-tool="brush" data-for="bordado" aria-label="Bordar" data-tip="Bordar (B)"><svg viewBox="0 0 24 24"><path d="M4 20l3-.8 9.2-9.2-2.2-2.2L4.8 17z"/><path d="M14 6l4 4"/></svg></button>
+      <button class="tool" data-tool="fill" data-for="bordado" aria-label="Balde" data-tip="Balde de tinta (G)"><svg viewBox="0 0 24 24"><path d="M6 11l6-6 6 6-6 6z"/><path d="M18 13c1 1.6 1.8 2.6 1.8 3.6a1.8 1.8 0 11-3.6 0c0-1 .8-2 1.8-3.6z"/></svg></button>
+      <button class="plain-tool" id="imgBtn" data-for="bordado" aria-label="Imagem de referência" data-tip="Imagem de referência"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M5 17l5-4 3 2 3-3 3 3"/></svg></button>
+      <button class="tool" id="shapeTool" data-tool="shape" data-for="crochet" aria-label="Forma-guia" data-tip="Forma-guia (escolher forma)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/></svg></button>
+      <button class="tool" data-tool="stitch" data-for="crochet" aria-label="Ponto solto" data-tip="Ponto solto (clique)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/></svg></button>
+      <button class="tool" data-tool="select" data-for="both" aria-label="Selecionar e editar" data-tip="Selecionar / editar (V)"><svg viewBox="0 0 24 24"><path d="M5 4l14 6-6 2-2 6z"/></svg></button>
+      <div class="sep" data-for="both"></div>
+      <button class="tool" data-tool="erase" data-for="both" aria-label="Borracha" data-tip="Borracha (E)"><svg viewBox="0 0 24 24"><path d="M4 15l7-7 6 6-4 4H8z"/><path d="M8 20h10"/></svg></button>
+      <button class="tool" data-tool="pan" data-for="both" aria-label="Mover tela" data-tip="Mover tela (espaço/H)"><svg viewBox="0 0 24 24"><path d="M12 4v16M4 12h16"/><path d="M9 7l3-3 3 3M9 17l3 3 3-3M7 9l-3 3 3 3M17 9l3 3-3 3"/></svg></button>
+    </nav>
+
+    <main>
+      <div id="viewFab">
+        <button id="zoomOut" title="Diminuir (-)">−</button>
+        <span class="zoomval" id="zoomVal">100%</span>
+        <button id="zoomIn" title="Aumentar (+)">+</button>
+        <div class="vsep"></div>
+        <button id="zoomFit" title="Ajustar à tela"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+        <div class="vsep"></div>
+        <button id="undoBtn" title="Desfazer (Cmd/Ctrl+Z)">↶</button>
+        <button id="redoBtn" title="Refazer (Cmd/Ctrl+Shift+Z)">↷</button>
+      </div>
+      <div id="stage">
+        <div id="canvasWrap">
+          <canvas id="board"></canvas>
+        </div>
+      </div>
+      <div class="coords" id="coords">—</div>
+      <div class="hint" id="hint"></div>
+      <div class="obj-panel" id="objPanel"></div>
+      <div id="visFab">
+        <button id="visToggle" title="Visibilidade"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        <div id="visPanel">
+          <button data-vis="grid"><svg></svg><span>Quadradinhos (bordado)</span></button>
+          <button data-vis="centers"><svg></svg><span>Linhas de simetria (crochê)</span></button>
+          <button data-vis="shapes"><svg></svg><span>Contornos das formas</span></button>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- flyout de formas (abre ao clicar na ferramenta de forma) -->
+<div id="shapeFlyout">
+  <button data-kind="circle" title="Círculo">◯</button>
+  <button data-kind="ellipse" title="Elipse">⬭</button>
+  <button data-kind="square" title="Quadrado">▢</button>
+  <button data-kind="rect" title="Retângulo">▭</button>
+  <button data-kind="line" title="Linha">╱</button>
+  <button data-kind="quad" title="Curva">︶</button>
+</div>
+
+<!-- flyout de formatos de download (abre ao clicar na seta de baixar) -->
+<div id="downloadFlyout">
+  <button data-fmt="png">PNG</button>
+  <button data-fmt="jpg">JPG</button>
+  <button data-fmt="svg">SVG</button>
+  <button data-fmt="json">Projeto (.json)</button>
+</div>
+
+<!-- New project modal -->
+<div class="modal-bg" id="newModal">
+  <div class="modal">
+    <h3>Novo projeto</h3>
+    <div class="field">
+      <label>Colunas (largura em pontos)</label>
+      <input type="number" id="newCols" min="2" max="400" value="40">
+    </div>
+    <div class="field">
+      <label>Linhas (altura em pontos)</label>
+      <input type="number" id="newRows" min="2" max="400" value="40">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="newCancel">Cancelar</button>
+      <button class="btn-primary" id="newConfirm">Criar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Meus projetos modal -->
+<div class="modal-bg" id="projectsModal">
+  <div class="modal" style="width:360px;">
+    <h3>Meus projetos</h3>
+    <div class="field">
+      <label>Salvar projeto atual como</label>
+      <div class="field-row">
+        <input type="text" id="projectNameInput" placeholder="Nome do projeto" maxlength="60">
+        <button class="btn-primary" id="projectSaveBtn">Salvar</button>
+      </div>
+    </div>
+    <div class="projects-list" id="projectsList"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="projectsClose">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+// ---------- Stitch types ----------
+// mode: "cell" (fills a grid cell) | "line" (segments between grid nodes) | "free" (freehand path)
+const STITCH_TYPES = [
+  { id: "full",     name: "Ponto cruz",   mode: "cell", cat: "Ponto contado" },
+  { id: "half_f",   name: "Meio /",       mode: "cell", cat: "Ponto contado" },
+  { id: "half_b",   name: "Meio \\",      mode: "cell", cat: "Ponto contado" },
+  { id: "tq_f",     name: "3/4 ponto",    mode: "cell", cat: "Ponto contado" },
+  { id: "reto",     name: "Ponto reto",   mode: "cell", cat: "Ponto contado" },
+  { id: "knot",     name: "Nó francês",   mode: "cell", cat: "Ponto contado" },
+  { id: "cr_chain", name: "Corrente",     mode: "crochet", cat: "Crochê" },
+  { id: "cr_chain2",name: "Corrente ∞",   mode: "crochet", cat: "Crochê" },
+  { id: "cr_slip",  name: "P. baixíssimo",mode: "crochet", cat: "Crochê" },
+  { id: "cr_sc",    name: "Ponto baixo",  mode: "crochet", cat: "Crochê" },
+  { id: "cr_hdc",   name: "P. meio alto", mode: "crochet", cat: "Crochê" },
+  { id: "cr_dc",    name: "Ponto alto",   mode: "crochet", cat: "Crochê" },
+  { id: "cr_tr",    name: "P. alto duplo",mode: "crochet", cat: "Crochê" },
+  { id: "cr_dtr",   name: "P. alto triplo",mode:"crochet", cat: "Crochê" },
+  { id: "cr_vst",   name: "V (2 juntos)", mode: "crochet", cat: "Crochê" },
+  { id: "cr_shell", name: "Leque (shell)",mode: "crochet", cat: "Crochê" },
+  { id: "cr_cluster",name:"Cluster",      mode: "crochet", cat: "Crochê" },
+  { id: "cr_puff",  name: "Puff/bobble",  mode: "crochet", cat: "Crochê" },
+  { id: "cr_popcorn",name:"Popcorn",      mode: "crochet", cat: "Crochê" },
+  { id: "cr_fpdc",  name: "Relevo frente",mode: "crochet", cat: "Crochê" },
+  { id: "cr_bpdc",  name: "Relevo trás",  mode: "crochet", cat: "Crochê" },
+  { id: "cr_picot", name: "Picô",         mode: "crochet", cat: "Crochê" },
+  { id: "cr_ring",  name: "Anel mágico",  mode: "crochet", cat: "Crochê" },
+  { id: "back",     name: "Ponto atrás",  mode: "line", cat: "Linhas / contorno" },
+  { id: "alinhavo", name: "Alinhavo",     mode: "line", cat: "Linhas / contorno" },
+  { id: "vagonite", name: "Vagonite",     mode: "line", cat: "Linhas / contorno" },
+  { id: "contorno", name: "Contorno",     mode: "line", cat: "Linhas / contorno" },
+  { id: "livre",    name: "Ponto livre",  mode: "free", cat: "À mão livre" },
+];
+function typeInfo(id) { return STITCH_TYPES.find(t => t.id === id); }
+function currentMode() { return typeInfo(state.type).mode; }
+
+const DEFAULT_PALETTE = [
+  "#c0392b","#e74c3c","#e67e22","#f1c40f","#f9e79f","#2ecc71",
+  "#27ae60","#16a085","#1abc9c","#3498db","#2980b9","#8e44ad",
+  "#9b59b6","#ec407a","#f8bbd0","#ffffff","#95a5a6","#34495e",
+  "#7f5539","#b08968","#000000","#c9a227","#6d4c41","#00897b",
+];
+
+// ---------- State ----------
+const state = {
+  cols: 40,
+  rows: 40,
+  cells: new Map(),   // "c,r" -> {color, type}
+  segs: new Map(),    // "x1,y1,x2,y2" -> {color, type}  (grid-node coords)
+  free: [],           // [{color, w, pts:[[fx,fy],...]}]  (cell-fraction coords)
+  palette: DEFAULT_PALETTE.slice(),
+  color: "#c0392b",
+  type: "full",
+  tool: "brush",
+  cell: 22,
+  showGrid: true,
+  symCenters: [],      // [{x, y, fold}]  x,y em coords de nó (inteiros)
+  showCenters: true,
+  fold: 6,             // nº de eixos p/ novos centros
+  crochet: [],         // pontos soltos [{type,x,y,angle,scale,color}]  (coords em células)
+  shapes: [],          // formas-guia com distribuição vinculada (ver createDraft)
+  shapeKind: "circle", // tipo de forma a desenhar
+  showShapes: true,    // mostra/oculta os contornos das formas-guia
+  mode: "bordado",     // "bordado" | "crochet"
+  bg: "#f3ede0",       // cor de fundo do tecido
+  image: null,         // {src, x, y, w, h, opacity} imagem de referência (coords em células)
+};
+const imgEl = new Image();
+let imgReady = false;
+imgEl.onload = () => { imgReady = true; draw(); };
+function loadRefImage(src) { imgReady = false; imgEl.src = src; }
+// cores da grade (e furos) automáticas por contraste com o fundo
+function gridColors() {
+  const n = parseInt((state.bg || "#f3ede0").slice(1), 16);
+  const L = 0.299*((n>>16)&255) + 0.587*((n>>8)&255) + 0.114*(n&255);
+  return L > 140
+    ? { thin:"rgba(0,0,0,0.16)", bold:"rgba(0,0,0,0.42)", hole:"rgba(60,45,25,0.12)" }
+    : { thin:"rgba(255,255,255,0.18)", bold:"rgba(255,255,255,0.5)", hole:"rgba(255,255,255,0.14)" };
+}
+const CROCHET_H = 1.5;       // altura base do ponto (em células)
+let lastCrochet = false; // tracks crochet<->outros p/ auto-troca grade/guias
+
+const MIN_CELL = 6, MAX_CELL = 60;
+const FREE_W = 0.22; // freehand thread thickness in cell fractions
+
+const board = document.getElementById("board");
+const ctx = board.getContext("2d");
+const stage = document.getElementById("stage");
+const coordsEl = document.getElementById("coords");
+const hintEl = document.getElementById("hint");
+
+// ---------- Undo / redo ----------
+let undoStack = [], redoStack = [], lastPushed = null;
+function snapshot() {
+  return JSON.stringify({
+    cols: state.cols, rows: state.rows,
+    cells: [...state.cells.entries()],
+    segs: [...state.segs.entries()],
+    free: state.free,
+    crochet: state.crochet,
+    shapes: state.shapes,
+    symCenters: state.symCenters,
+    image: state.image,
+  });
+}
+function restore(snap) {
+  const d = JSON.parse(snap);
+  state.cols = d.cols; state.rows = d.rows;
+  state.cells = new Map(d.cells);
+  state.segs = new Map(d.segs || []);
+  state.free = d.free || [];
+  state.crochet = d.crochet || [];
+  state.shapes = d.shapes || [];
+  state.image = d.image || null;
+  if (state.image) loadRefImage(state.image.src); else imgReady = false;
+  selectedObj = null; selMulti = []; refreshPanel();
+  state.symCenters = migrateCenters(d.symCenters);
+  selectedCenter = state.symCenters[0] || null; invalidateSym();
+  resizeBoard(); draw(); autosave();
+}
+function pushUndo() {
+  const s = snapshot();
+  if (s === lastPushed) return;
+  undoStack.push(s); lastPushed = s;
+  if (undoStack.length > 80) undoStack.shift();
+  redoStack.length = 0;
+  updateUndoButtons();
+}
+function undo() {
+  if (!undoStack.length) return;
+  redoStack.push(snapshot());
+  const s = undoStack.pop(); lastPushed = undoStack[undoStack.length-1] ?? null;
+  restore(s); updateUndoButtons();
+}
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push(snapshot()); lastPushed = undoStack[undoStack.length-1];
+  restore(redoStack.pop()); updateUndoButtons();
+}
+function updateUndoButtons() {
+  document.getElementById("undoBtn").style.opacity = undoStack.length ? 1 : .4;
+  document.getElementById("redoBtn").style.opacity = redoStack.length ? 1 : .4;
+}
+
+// ---------- Board sizing ----------
+function resizeBoard() {
+  const cs = state.cell;
+  const w = state.cols * cs, h = state.rows * cs;
+  const dpr = window.devicePixelRatio || 1;
+  board.width = w * dpr; board.height = h * dpr;
+  board.style.width = w + "px"; board.style.height = h + "px";
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+// ---------- Color helpers ----------
+function shade(hex, amt) {
+  const n = parseInt(hex.slice(1), 16);
+  let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  r = Math.max(0, Math.min(255, Math.round(r + amt)));
+  g = Math.max(0, Math.min(255, Math.round(g + amt)));
+  b = Math.max(0, Math.min(255, Math.round(b + amt)));
+  return "rgb(" + r + "," + g + "," + b + ")";
+}
+
+// ---------- Yarn strand (used by cell + free) ----------
+function strand(g, ax, ay, bx, by, color, lw) {
+  g.lineCap = "round";
+  g.strokeStyle = shade(color, -45); g.lineWidth = lw;
+  g.beginPath(); g.moveTo(ax + lw*0.18, ay + lw*0.18); g.lineTo(bx + lw*0.18, by + lw*0.18); g.stroke();
+  g.strokeStyle = color; g.lineWidth = lw;
+  g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke();
+  g.strokeStyle = shade(color, 55); g.lineWidth = lw * 0.34;
+  g.beginPath(); g.moveTo(ax - lw*0.16, ay - lw*0.16); g.lineTo(bx - lw*0.16, by - lw*0.16); g.stroke();
+}
+
+// ---------- Cell stitch drawing ----------
+function drawCellStitch(g, x, y, cs, color, type) {
+  if (type.startsWith("cr_")) { drawCrochet(g, x, y, cs, color, type); return; }
+  const pad = cs * 0.13;
+  const x0 = x + pad, y0 = y + pad, x1 = x + cs - pad, y1 = y + cs - pad;
+  const lw = Math.max(1.4, cs * 0.16);
+
+  if (type === "full") {
+    strand(g, x0, y1, x1, y0, color, lw);
+    strand(g, x0, y0, x1, y1, color, lw);
+  } else if (type === "half_f") {
+    strand(g, x0, y1, x1, y0, color, lw);
+  } else if (type === "half_b") {
+    strand(g, x0, y0, x1, y1, color, lw);
+  } else if (type === "tq_f") {
+    strand(g, x0, y1, x1, y0, color, lw);
+    strand(g, x1, y1, x + cs/2, y + cs/2, color, lw);
+  } else if (type === "reto") {
+    strand(g, x + cs/2, y0, x + cs/2, y1, color, lw * 1.05);
+  } else if (type === "knot") {
+    const cx = x + cs/2, cy = y + cs/2, r = cs*0.22;
+    g.fillStyle = shade(color, -40);
+    g.beginPath(); g.arc(cx + r*0.15, cy + r*0.15, r, 0, Math.PI*2); g.fill();
+    g.fillStyle = color;
+    g.beginPath(); g.arc(cx, cy, r, 0, Math.PI*2); g.fill();
+    g.fillStyle = shade(color, 60);
+    g.beginPath(); g.arc(cx - r*0.3, cy - r*0.3, r*0.4, 0, Math.PI*2); g.fill();
+  }
+}
+
+// ---------- Crochet chart symbols (cell mode) ----------
+function drawCrochet(g, x, y, cs, color, type) {
+  const cx = x + cs/2, cy = y + cs/2;
+  const pad = cs * 0.18;
+  const lw = Math.max(1.5, cs * 0.11);
+  g.strokeStyle = color; g.fillStyle = color;
+  g.lineWidth = lw; g.lineCap = "round"; g.lineJoin = "round"; g.setLineDash([]);
+
+  if (type === "cr_chain") {                 // corrente: oval
+    g.beginPath(); g.ellipse(cx, cy, cs*0.34, cs*0.17, 0, 0, Math.PI*2); g.stroke();
+  } else if (type === "cr_slip") {           // ponto baixíssimo: ponto cheio
+    g.beginPath(); g.arc(cx, cy, cs*0.13, 0, Math.PI*2); g.fill();
+  } else if (type === "cr_ring") {           // anel mágico: círculo aberto
+    g.lineWidth = lw * 1.2;
+    g.beginPath(); g.arc(cx, cy, cs*0.34, 0, Math.PI*2); g.stroke();
+  } else if (type === "cr_sc") {             // ponto baixo: cruz "+"
+    g.beginPath();
+    g.moveTo(cx, y + pad); g.lineTo(cx, y + cs - pad);
+    g.moveTo(x + pad, cy); g.lineTo(x + cs - pad, cy);
+    g.stroke();
+  } else {
+    // hastes verticais com topo em "T" (meio alto, alto, alto duplo)
+    const top = y + pad, bot = y + cs - pad, halfW = cs * 0.20;
+    g.beginPath();
+    g.moveTo(cx, top); g.lineTo(cx, bot);                 // haste
+    g.moveTo(cx - halfW, top); g.lineTo(cx + halfW, top); // topo
+    g.stroke();
+    const slashes = type === "cr_hdc" ? 0 : (type === "cr_dc" ? 1 : 2);
+    for (let i = 0; i < slashes; i++) {
+      const yy = cy - (slashes-1)*cs*0.11/2 + i*cs*0.16;
+      g.beginPath();
+      g.moveTo(cx - halfW*0.9, yy + cs*0.07);
+      g.lineTo(cx + halfW*0.9, yy - cs*0.07);
+      g.stroke();
+    }
+  }
+}
+
+// ---------- Crochet symbols ----------
+// desenha o símbolo com a BASE na origem (0,0) crescendo p/ cima (-y). h = altura em px.
+function drawCrochetSymbol(g, h, color, type) {
+  const w = h * 0.6, lw = Math.max(1.5, h * 0.075);
+  g.strokeStyle = color; g.fillStyle = color;
+  g.lineWidth = lw; g.lineCap = "round"; g.lineJoin = "round"; g.setLineDash([]);
+
+  if (type === "cr_chain") {                 // corrente: oval
+    g.beginPath(); g.ellipse(0, -h*0.5, w*0.55, h*0.3, 0, 0, Math.PI*2); g.stroke();
+  } else if (type === "cr_chain2") {         // corrente dupla ∞: dois ovais
+    g.beginPath(); g.ellipse(0, -h*0.3, w*0.5, h*0.22, 0, 0, Math.PI*2); g.stroke();
+    g.beginPath(); g.ellipse(0, -h*0.72, w*0.5, h*0.22, 0, 0, Math.PI*2); g.stroke();
+  } else if (type === "cr_slip") {           // ponto baixíssimo: ponto cheio
+    g.beginPath(); g.arc(0, -h*0.28, w*0.34, 0, Math.PI*2); g.fill();
+  } else if (type === "cr_ring") {           // anel mágico: círculo
+    g.lineWidth = lw * 1.3;
+    g.beginPath(); g.arc(0, -h*0.5, h*0.5, 0, Math.PI*2); g.stroke();
+  } else if (type === "cr_sc") {             // ponto baixo: cruz "+"
+    const cy = -h*0.5;
+    g.beginPath();
+    g.moveTo(0, cy - h*0.32); g.lineTo(0, cy + h*0.32);
+    g.moveTo(-w*0.45, cy); g.lineTo(w*0.45, cy);
+    g.stroke();
+  } else if (type === "cr_vst") {            // V: 2 pontos saindo da mesma base
+    g.beginPath();
+    g.moveTo(0, 0); g.lineTo(-w*0.6, -h);
+    g.moveTo(0, 0); g.lineTo(w*0.6, -h);
+    g.moveTo(-w*0.55, -h); g.lineTo(-w*0.35, -h);      // topinhos
+    g.moveTo(w*0.35, -h); g.lineTo(w*0.55, -h);
+    g.stroke();
+  } else if (type === "cr_shell") {          // leque/shell: várias hastes abrindo p/ cima
+    const n = 5;
+    g.beginPath();
+    for (let i = 0; i < n; i++) {
+      const sx = (i/(n-1) - 0.5) * 2 * w * 0.9;
+      g.moveTo(0, 0); g.lineTo(sx, -h);
+    }
+    g.stroke();
+  } else if (type === "cr_cluster") {        // cluster: hastes juntas no topo, abertas na base
+    const n = 3;
+    g.beginPath();
+    for (let i = 0; i < n; i++) {
+      const bx = (i/(n-1) - 0.5) * 2 * w * 0.55;
+      g.moveTo(0, -h); g.lineTo(bx, 0);
+    }
+    g.moveTo(-w*0.28, -h); g.lineTo(w*0.28, -h);        // topo unido
+    g.stroke();
+  } else if (type === "cr_puff") {           // puff/bobble: oval com risquinhos
+    g.beginPath(); g.ellipse(0, -h*0.5, w*0.42, h*0.46, 0, 0, Math.PI*2); g.stroke();
+    g.beginPath();
+    for (const sx of [-w*0.2, 0, w*0.2]) { g.moveTo(sx, -h*0.14); g.lineTo(sx, -h*0.86); }
+    g.stroke();
+  } else if (type === "cr_picot") {          // picô: haste curta + laço
+    g.beginPath(); g.moveTo(0, 0); g.lineTo(0, -h*0.42); g.stroke();
+    g.beginPath(); g.arc(0, -h*0.64, w*0.36, 0, Math.PI*2); g.stroke();
+  } else if (type === "cr_popcorn") {        // popcorn: leque com topo curvo unido
+    const n = 5;
+    g.beginPath();
+    for (let i = 0; i < n; i++) {
+      const sx = (i/(n-1) - 0.5) * 2 * w * 0.7;
+      g.moveTo(0, 0); g.lineTo(sx, -h*0.9);
+    }
+    g.stroke();
+    g.beginPath(); g.moveTo(-w*0.7, -h*0.9);
+    g.quadraticCurveTo(0, -h*1.15, w*0.7, -h*0.9); g.stroke();
+  } else if (type === "cr_fpdc" || type === "cr_bpdc") { // ponto alto em relevo (frente/trás)
+    const dir = type === "cr_fpdc" ? 1 : -1;
+    g.beginPath();
+    g.moveTo(0, 0); g.lineTo(0, -h);
+    g.moveTo(-w*0.42, -h); g.lineTo(w*0.42, -h);
+    g.moveTo(-w*0.4, -h*0.44); g.lineTo(w*0.4, -h*0.56);   // uma barra (é um alto)
+    g.moveTo(0, 0); g.lineTo(dir*w*0.4, 0); g.lineTo(dir*w*0.4, -h*0.2); // pézinho de relevo
+    g.stroke();
+  } else {                                   // T: meio alto / alto / alto duplo / alto triplo
+    g.beginPath();
+    g.moveTo(0, 0); g.lineTo(0, -h);                    // haste
+    g.moveTo(-w*0.42, -h); g.lineTo(w*0.42, -h);        // topo
+    g.stroke();
+    const slashes = type === "cr_hdc" ? 0 : type === "cr_dc" ? 1 : type === "cr_tr" ? 2 : 3;
+    for (let i = 0; i < slashes; i++) {
+      const yy = -h*0.5 - (slashes-1)*h*0.12/2 + i*h*0.18;
+      g.beginPath();
+      g.moveTo(-w*0.4, yy + h*0.06); g.lineTo(w*0.4, yy - h*0.06); g.stroke();
+    }
+  }
+}
+// carimba um ponto de crochê (coords em células), rotacionado por 'angle' e escala 'scale'
+function drawCrochetStamp(g, st, u) {
+  g.save();
+  g.translate(st.x * u, st.y * u);
+  g.rotate(st.angle || 0);
+  if (st.lean) g.transform(1, 0, -st.lean, 1, 0, 0); // cisalhamento: base fixa, topo inclinado
+  drawCrochetSymbol(g, CROCHET_H * (st.scale || 1) * u, st.color, st.type);
+  g.restore();
+}
+
+// ---------- Crochet shapes (guias que distribuem pontos vinculados) ----------
+let shapeSeq = 1;
+let selectedObj = null;   // {kind:'shape'|'stitch', ref} | null
+let shapeDraft = null, shapeStart = null, selDrag = null;
+
+function rot2(x, y, a) { const c = Math.cos(a), s = Math.sin(a); return { x: x*c - y*s, y: x*s + y*c }; }
+function shapeCenter(s) {
+  if (s.kind === "line") return { x:(s.p1.x+s.p2.x)/2, y:(s.p1.y+s.p2.y)/2 };
+  if (s.kind === "quad") return { x:(s.p1.x+s.c.x+s.p2.x)/3, y:(s.p1.y+s.c.y+s.p2.y)/3 };
+  return { x: s.cx, y: s.cy };
+}
+function shapeIsClosed(s) { return s.kind === "circle" || s.kind === "ellipse" || s.kind === "rect"; }
+// ponto no parâmetro t∈[0,1) -> {x,y,nx,ny} (nx,ny = normal externa unit), em células
+function shapePoint(s, t) {
+  const R = s.rot || 0;
+  if (s.kind === "circle") {
+    const a = 2*Math.PI*t, l = rot2(s.r*Math.cos(a), s.r*Math.sin(a), R), n = rot2(Math.cos(a), Math.sin(a), R);
+    return { x: s.cx+l.x, y: s.cy+l.y, nx: n.x, ny: n.y };
+  }
+  if (s.kind === "ellipse") {
+    const a = 2*Math.PI*t, l = rot2(s.rx*Math.cos(a), s.ry*Math.sin(a), R);
+    let nx = s.ry*Math.cos(a), ny = s.rx*Math.sin(a); const m = Math.hypot(nx,ny)||1;
+    const n = rot2(nx/m, ny/m, R);
+    return { x: s.cx+l.x, y: s.cy+l.y, nx: n.x, ny: n.y };
+  }
+  if (s.kind === "rect") {
+    const hw = s.w/2, hh = s.h/2;
+    const corners = [[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]], normals = [[0,-1],[1,0],[0,1],[-1,0]];
+    const lens = [s.w,s.h,s.w,s.h], per = 2*(s.w+s.h);
+    let d = t*per, e = 0; while (e < 3 && d > lens[e]) { d -= lens[e]; e++; }
+    const [ax,ay] = corners[e], [bx,by] = corners[(e+1)%4], f = lens[e] ? d/lens[e] : 0;
+    const l = rot2(ax+(bx-ax)*f, ay+(by-ay)*f, R), n = rot2(normals[e][0], normals[e][1], R);
+    return { x: s.cx+l.x, y: s.cy+l.y, nx: n.x, ny: n.y };
+  }
+  if (s.kind === "line") {
+    const x = s.p1.x+(s.p2.x-s.p1.x)*t, y = s.p1.y+(s.p2.y-s.p1.y)*t;
+    let dx = s.p2.x-s.p1.x, dy = s.p2.y-s.p1.y; const m = Math.hypot(dx,dy)||1;
+    return { x, y, nx: -dy/m, ny: dx/m };
+  }
+  // quad (bézier quadrática)
+  const mt = 1-t;
+  const x = mt*mt*s.p1.x + 2*mt*t*s.c.x + t*t*s.p2.x;
+  const y = mt*mt*s.p1.y + 2*mt*t*s.c.y + t*t*s.p2.y;
+  let dx = 2*mt*(s.c.x-s.p1.x) + 2*t*(s.p2.x-s.c.x), dy = 2*mt*(s.c.y-s.p1.y) + 2*t*(s.p2.y-s.c.y);
+  const m = Math.hypot(dx,dy)||1;
+  return { x, y, nx: -dy/m, ny: dx/m };
+}
+// posições+ângulos dos pontos distribuídos (vinculados à forma)
+function shapeStitches(s) {
+  const out = []; if (!s.count || s.count < 1) return out;
+  const closed = shapeIsClosed(s), sd = s.side || 1;
+  for (let i = 0; i < s.count; i++) {
+    const t = closed ? ((((i + (s.offset||0)) / s.count) % 1) + 1) % 1
+                     : (s.count > 1 ? i/(s.count-1) : 0.5);
+    const P = shapePoint(s, t);
+    out.push({ x: P.x, y: P.y, angle: Math.atan2(P.nx*sd, -P.ny*sd) });
+  }
+  return out;
+}
+function moveShape(s, dx, dy) {
+  if (s.kind === "line") { s.p1.x+=dx; s.p1.y+=dy; s.p2.x+=dx; s.p2.y+=dy; }
+  else if (s.kind === "quad") { s.p1.x+=dx; s.p1.y+=dy; s.c.x+=dx; s.c.y+=dy; s.p2.x+=dx; s.p2.y+=dy; }
+  else { s.cx+=dx; s.cy+=dy; }
+}
+function shapeHandles(s) {
+  const c = shapeCenter(s), R = s.rot || 0;
+  if (s.kind === "circle") { const e = rot2(s.r,0,R); return [{id:"r", x:c.x+e.x, y:c.y+e.y}]; }
+  if (s.kind === "ellipse") {
+    const ex=rot2(s.rx,0,R), ey=rot2(0,s.ry,R), er=rot2(0,-(s.ry+1.4),R);
+    return [{id:"rx",x:c.x+ex.x,y:c.y+ex.y},{id:"ry",x:c.x+ey.x,y:c.y+ey.y},{id:"rot",x:c.x+er.x,y:c.y+er.y}];
+  }
+  if (s.kind === "rect") {
+    const es=rot2(s.w/2,s.h/2,R), er=rot2(0,-(s.h/2+1.4),R);
+    return [{id:"size",x:c.x+es.x,y:c.y+es.y},{id:"rot",x:c.x+er.x,y:c.y+er.y}];
+  }
+  if (s.kind === "line") return [{id:"p1",x:s.p1.x,y:s.p1.y},{id:"p2",x:s.p2.x,y:s.p2.y}];
+  return [{id:"p1",x:s.p1.x,y:s.p1.y},{id:"c",x:s.c.x,y:s.c.y},{id:"p2",x:s.p2.x,y:s.p2.y}];
+}
+function shapeHit(s, x, y) {
+  if (s.stitch && s.stitch !== "none")
+    for (const p of shapeStitches(s)) if (Math.hypot(p.x-x, p.y-y) < 0.8) return true;
+  for (let i = 0; i <= 48; i++) { const P = shapePoint(s, i/48); if (Math.hypot(P.x-x, P.y-y) < 0.5) return true; }
+  return false;
+}
+function looseHandle(st) {
+  const up = rot2(0, -CROCHET_H*(st.scale||1), st.angle||0);
+  return { x: st.x+up.x, y: st.y+up.y };
+}
+function createDraft(kind, nx, ny, fx, fy) {
+  const stitch = state.type && state.type.startsWith("cr_") ? state.type : "cr_dc";
+  const base = { id: shapeSeq++, kind, rot: 0, stitch, count: 12, scale: 1, side: 1, offset: 0, color: state.color };
+  if (kind === "circle") return { ...base, cx:nx, cy:ny, r: Math.max(0.5, Math.hypot(fx-nx, fy-ny)) };
+  if (kind === "ellipse") return { ...base, cx:nx, cy:ny, rx: Math.max(0.5, Math.abs(fx-nx)), ry: Math.max(0.5, Math.abs(fy-ny)) };
+  if (kind === "rect") return { ...base, cx:nx, cy:ny, w: Math.max(1, 2*Math.abs(fx-nx)), h: Math.max(1, 2*Math.abs(fy-ny)) };
+  if (kind === "square") { const d = Math.max(Math.abs(fx-nx), Math.abs(fy-ny)); return { ...base, kind:"rect", cx:nx, cy:ny, w: Math.max(1,2*d), h: Math.max(1,2*d) }; }
+  if (kind === "line") return { ...base, p1:{x:nx,y:ny}, p2:{x:fx,y:fy} };
+  return { ...base, p1:{x:nx,y:ny}, c:{x:(nx+fx)/2,y:(ny+fy)/2}, p2:{x:fx,y:fy} };
+}
+function placeLoose(x, y) {
+  const type = state.type && state.type.startsWith("cr_") ? state.type : "cr_dc";
+  const st = { type, x, y, angle: 0, scale: 1, color: state.color, lean: 0 };
+  state.crochet.push(st); selectedObj = { kind:"stitch", ref: st };
+}
+// tipo do i-ésimo ponto da forma: usa a sequência (padrão) se houver, senão o ponto único
+function patternType(s, i) {
+  return (s.pattern && s.pattern.length) ? s.pattern[i % s.pattern.length] : s.stitch;
+}
+// converte uma forma em pontos soltos e a remove
+function bakeShape(s) {
+  const out = [];
+  shapeStitches(s).forEach((p, i) => {
+    const st = { type: patternType(s, i), x: p.x, y: p.y, angle: p.angle, scale: s.scale||1, color: s.color, lean: s.lean||0 };
+    state.crochet.push(st); out.push(st);
+  });
+  const idx = state.shapes.indexOf(s); if (idx >= 0) state.shapes.splice(idx, 1);
+  return out;
+}
+
+// desenho da camada de crochê (formas + pontos)
+function drawShapeOutline(g, s, u, sel) {
+  g.setLineDash([]); g.lineWidth = sel ? 2 : 1.2; g.lineCap = "round"; g.lineJoin = "round";
+  g.strokeStyle = sel ? "rgba(124,156,255,0.9)" : "rgba(150,150,150,0.55)";
+  g.beginPath();
+  if (s.kind === "circle") g.arc(s.cx*u, s.cy*u, s.r*u, 0, Math.PI*2);
+  else if (s.kind === "ellipse") g.ellipse(s.cx*u, s.cy*u, s.rx*u, s.ry*u, s.rot||0, 0, Math.PI*2);
+  else if (s.kind === "rect") { g.save(); g.translate(s.cx*u, s.cy*u); g.rotate(s.rot||0); g.rect(-s.w/2*u, -s.h/2*u, s.w*u, s.h*u); g.restore(); }
+  else if (s.kind === "line") { g.moveTo(s.p1.x*u, s.p1.y*u); g.lineTo(s.p2.x*u, s.p2.y*u); }
+  else { g.moveTo(s.p1.x*u, s.p1.y*u); g.quadraticCurveTo(s.c.x*u, s.c.y*u, s.p2.x*u, s.p2.y*u); }
+  g.stroke();
+}
+function drawSelHalo(g, x, y, r, u) {
+  g.fillStyle = "rgba(124,156,255,0.18)"; g.beginPath(); g.arc(x*u, y*u, r*u, 0, Math.PI*2); g.fill();
+}
+function drawHandleDot(g, x, y, u, filled) {
+  g.setLineDash([]); g.lineWidth = 1.5; g.strokeStyle = "#8fa8ff";
+  g.fillStyle = filled ? "#8fa8ff" : "rgba(30,33,44,0.95)";
+  g.beginPath(); g.arc(x*u, y*u, 6, 0, Math.PI*2); g.fill(); g.stroke();
+}
+function drawCrochetLayer(g, u) {
+  for (const s of state.shapes) {
+    const sel = selectedObj && selectedObj.kind === "shape" && selectedObj.ref === s;
+    if (state.showShapes || sel) drawShapeOutline(g, s, u, sel);
+    const has = (s.pattern && s.pattern.length) || (s.stitch && s.stitch !== "none");
+    if (has) shapeStitches(s).forEach((p, i) => {
+      const ty = patternType(s, i); if (!ty || ty === "none") return;
+      if (sel) drawSelHalo(g, p.x, p.y, CROCHET_H*(s.scale||1)*0.5, u);
+      drawCrochetStamp(g, { type: ty, x:p.x, y:p.y, angle:p.angle, scale:s.scale, color:s.color, lean:s.lean }, u);
+    });
+  }
+  const inMulti = new Set(selMulti);
+  for (const st of state.crochet) {
+    const sel = (selectedObj && selectedObj.kind === "stitch" && selectedObj.ref === st) || inMulti.has(st);
+    if (sel) drawSelHalo(g, st.x, st.y, CROCHET_H*(st.scale||1)*0.5, u);
+    drawCrochetStamp(g, st, u);
+  }
+  if (shapeDraft) drawShapeOutline(g, shapeDraft, u, true);
+  // grupo (multi-seleção): bbox + alça de girar
+  if (state.tool === "select" && selMulti.length) {
+    const gb = groupBounds(selMulti);
+    g.setLineDash([5,4]); g.strokeStyle = "rgba(124,156,255,0.9)"; g.lineWidth = 1.5;
+    g.strokeRect(gb.x0*u, gb.y0*u, (gb.x1-gb.x0)*u, (gb.y1-gb.y0)*u); g.setLineDash([]);
+    const rh = { x: gb.cx, y: gb.y0 - 1.3 };
+    g.strokeStyle = "rgba(124,156,255,0.6)"; g.beginPath(); g.moveTo(gb.cx*u, gb.y0*u); g.lineTo(rh.x*u, rh.y*u); g.stroke();
+    drawHandleDot(g, rh.x, rh.y, u, true);
+  }
+  // retângulo de seleção em andamento
+  if (state.tool === "select" && selDrag && selDrag.mode === "marquee") {
+    const x = Math.min(selDrag.x0,selDrag.x1)*u, y = Math.min(selDrag.y0,selDrag.y1)*u;
+    const w = Math.abs(selDrag.x1-selDrag.x0)*u, h = Math.abs(selDrag.y1-selDrag.y0)*u;
+    g.setLineDash([4,3]); g.strokeStyle = "rgba(124,156,255,0.9)"; g.lineWidth = 1;
+    g.fillStyle = "rgba(124,156,255,0.10)"; g.fillRect(x,y,w,h); g.strokeRect(x,y,w,h); g.setLineDash([]);
+  }
+  if (state.tool === "select" && selectedObj) {
+    if (selectedObj.kind === "shape") for (const h of shapeHandles(selectedObj.ref)) drawHandleDot(g, h.x, h.y, u, h.id === "rot");
+    else if (selectedObj.kind === "image") {
+      const im = selectedObj.ref;
+      g.setLineDash([5,4]); g.strokeStyle = "rgba(124,156,255,0.9)"; g.lineWidth = 1.5;
+      g.strokeRect(im.x*u, im.y*u, im.w*u, im.h*u); g.setLineDash([]);
+      drawHandleDot(g, im.x+im.w, im.y+im.h, u, true);
+    }
+    else { const st = selectedObj.ref, h = looseHandle(st);
+      g.setLineDash([3,3]); g.strokeStyle = "rgba(124,156,255,0.6)"; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(st.x*u, st.y*u); g.lineTo(h.x*u, h.y*u); g.stroke(); g.setLineDash([]);
+      drawHandleDot(g, h.x, h.y, u, true);
+    }
+  }
+}
+
+// ---------- Line stitch drawing (node segments) ----------
+function drawLineSeg(g, ax, ay, bx, by, cs, color, type) {
+  const lw = Math.max(1.6, cs * 0.12);
+  g.lineCap = "round"; g.lineJoin = "round";
+  if (type === "alinhavo") {
+    const dash = Math.hypot(bx-ax, by-ay);
+    g.setLineDash([Math.max(3, cs*0.32), Math.max(2, cs*0.24)]);
+    g.strokeStyle = shade(color, -40); g.lineWidth = lw;
+    g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke();
+    g.strokeStyle = color; g.lineWidth = lw*0.75;
+    g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke();
+    g.setLineDash([]);
+  } else if (type === "vagonite") {
+    const w = lw * 1.7;
+    g.setLineDash([]);
+    g.strokeStyle = shade(color, -45); g.lineWidth = w;
+    g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke();
+    g.strokeStyle = color; g.lineWidth = w*0.8;
+    g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke();
+    g.strokeStyle = shade(color, 45); g.lineWidth = w*0.22;
+    g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke();
+  } else { // back, contorno
+    const w = type === "contorno" ? lw*0.7 : lw;
+    g.setLineDash([]);
+    g.strokeStyle = shade(color, -40); g.lineWidth = w;
+    g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke();
+    g.strokeStyle = color; g.lineWidth = w*0.72;
+    g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke();
+  }
+}
+
+// ---------- Free stroke drawing ----------
+function drawFreeStroke(g, stroke, cs) {
+  const pts = stroke.pts;
+  if (pts.length < 1) return;
+  const lw = Math.max(2, (stroke.w || FREE_W) * cs);
+  g.lineCap = "round"; g.lineJoin = "round"; g.setLineDash([]);
+  function path() {
+    g.beginPath();
+    g.moveTo(pts[0][0]*cs, pts[0][1]*cs);
+    if (pts.length === 1) { g.lineTo(pts[0][0]*cs + 0.01, pts[0][1]*cs); return; }
+    for (let i = 1; i < pts.length - 1; i++) {
+      const mx = (pts[i][0] + pts[i+1][0]) / 2 * cs;
+      const my = (pts[i][1] + pts[i+1][1]) / 2 * cs;
+      g.quadraticCurveTo(pts[i][0]*cs, pts[i][1]*cs, mx, my);
+    }
+    const last = pts[pts.length-1];
+    g.lineTo(last[0]*cs, last[1]*cs);
+  }
+  g.strokeStyle = shade(stroke.color, -45); g.lineWidth = lw; path(); g.stroke();
+  g.strokeStyle = stroke.color; g.lineWidth = lw*0.72; path(); g.stroke();
+  g.strokeStyle = shade(stroke.color, 45); g.lineWidth = lw*0.22; path(); g.stroke();
+}
+
+// desenha uma célula com rotação opcional (ângulo baked no ponto)
+function drawCellRotated(g, c, r, u, val) {
+  const ang = val.angle || 0;
+  if (!ang) { drawCellStitch(g, c*u, r*u, u, val.color, val.type); return; }
+  g.save();
+  g.translate((c + 0.5)*u, (r + 0.5)*u);
+  g.rotate(ang);
+  g.translate(-u/2, -u/2);
+  drawCellStitch(g, 0, 0, u, val.color, val.type);
+  g.restore();
+}
+
+// ---------- Main draw ----------
+let rafPending = false;
+function draw() { if (!rafPending) { rafPending = true; requestAnimationFrame(doDraw); } }
+function doDraw() {
+  rafPending = false;
+  const cs = state.cell, W = state.cols * cs, H = state.rows * cs, gc = gridColors();
+  ctx.fillStyle = state.bg; ctx.fillRect(0, 0, W, H);
+  if (state.image && imgReady) {
+    ctx.save(); ctx.globalAlpha = state.image.opacity != null ? state.image.opacity : 1;
+    ctx.drawImage(imgEl, state.image.x*cs, state.image.y*cs, state.image.w*cs, state.image.h*cs);
+    ctx.restore();
+  }
+  if (state.showGrid && cs >= 10) {
+    ctx.fillStyle = gc.hole;
+    for (let c = 0; c <= state.cols; c++)
+      for (let r = 0; r <= state.rows; r++) {
+        ctx.beginPath(); ctx.arc(c*cs, r*cs, Math.max(0.8, cs*0.06), 0, Math.PI*2); ctx.fill();
+      }
+  }
+  if (state.showGrid) {
+    ctx.lineWidth = 1; ctx.setLineDash([]);
+    for (let c = 0; c <= state.cols; c++) {
+      ctx.strokeStyle = c % 10 === 0 ? gc.bold : gc.thin;
+      ctx.beginPath(); ctx.moveTo(c*cs + .5, 0); ctx.lineTo(c*cs + .5, H); ctx.stroke();
+    }
+    for (let r = 0; r <= state.rows; r++) {
+      ctx.strokeStyle = r % 10 === 0 ? gc.bold : gc.thin;
+      ctx.beginPath(); ctx.moveTo(0, r*cs + .5); ctx.lineTo(W, r*cs + .5); ctx.stroke();
+    }
+  }
+  for (const [key, val] of state.cells) {
+    const [c, r] = key.split(",").map(Number);
+    drawCellRotated(ctx, c, r, cs, val);
+  }
+  for (const [key, val] of state.segs) {
+    const [x1, y1, x2, y2] = key.split(",").map(Number);
+    drawLineSeg(ctx, x1*cs, y1*cs, x2*cs, y2*cs, cs, val.color, val.type);
+  }
+  for (const s of state.free) drawFreeStroke(ctx, s, cs);
+  if (currentFree) drawFreeStroke(ctx, currentFree, cs);
+  if (state.mode === "crochet") drawRadialGuide(ctx, cs);
+  drawCrochetLayer(ctx, cs);
+  if (preview) drawPreview();
+}
+
+// ---------- Coord helpers ----------
+function eventToCell(e) {
+  const rect = board.getBoundingClientRect();
+  const x = (e.clientX - rect.left) / state.cell;
+  const y = (e.clientY - rect.top) / state.cell;
+  return { c: Math.floor(x), r: Math.floor(y), fx: x, fy: y };
+}
+function inBounds(c, r) { return c >= 0 && r >= 0 && c < state.cols && r < state.rows; }
+function nearestNode(fx, fy) {
+  return { x: Math.max(0, Math.min(state.cols, Math.round(fx))),
+           y: Math.max(0, Math.min(state.rows, Math.round(fy))) };
+}
+
+// ---------- Symmetry centers (guias polares + orientação radial) ----------
+// Modelo: state.symCenters = [{x, y, spokes}].
+// Ao criar um centro ele já mostra eixos radiais + círculos concêntricos.
+// NÃO há duplicação: cada ponto colocado é um único ponto, apenas rotacionado
+// p/ "ficar em pé" sobre o centro selecionado (o centro é o chão dele).
+let selectedCenter = null;
+function invalidateSym() {} // no-op (mantido p/ compat de chamadas)
+function nodeIn(p) { return p.x >= 0 && p.y >= 0 && p.x <= state.cols && p.y <= state.rows; }
+
+// ângulo p/ rotacionar um símbolo (que naturalmente aponta p/ cima) de modo que
+// sua base fique voltada ao centro selecionado e o topo p/ fora.
+function orientAngle(x, y) {
+  return 0; // pontos de bordado ficam retos na grade; centros são só guia visual
+}
+
+// migra centros de formatos antigos -> {x, y, spokes}
+function migrateCenters(arr) {
+  return (arr || []).map(c => ({ x: c.x, y: c.y, spokes: c.spokes || c.fold || state.fold || 6, hidden: !!c.hidden }));
+}
+
+// desenha os centros: eixos radiais + círculos concêntricos + marcador (overlay)
+// guia radial FIXA: linhas + círculos concêntricos saindo do centro da imagem (sem edição)
+function drawRadialGuide(g, u) {
+  const cx = state.cols/2 * u, cy = state.rows/2 * u, L = Math.hypot(state.cols, state.rows) * u, N = 8;
+  g.setLineDash([]); g.lineWidth = 1;
+  g.strokeStyle = "rgba(91,124,255,0.15)";
+  for (let r = u*3; r < L; r += u*3) { g.beginPath(); g.arc(cx, cy, r, 0, Math.PI*2); g.stroke(); }
+  g.strokeStyle = "rgba(91,124,255,0.30)";
+  for (let i = 0; i < N; i++) { const a = i*Math.PI/N, dx = Math.cos(a)*L, dy = Math.sin(a)*L;
+    g.beginPath(); g.moveTo(cx-dx, cy-dy); g.lineTo(cx+dx, cy+dy); g.stroke(); }
+  g.fillStyle = "rgba(91,124,255,0.6)"; g.beginPath(); g.arc(cx, cy, 2.5, 0, Math.PI*2); g.fill();
+}
+
+// ---------- Cell ops ----------
+function setCell(c, r, color, type, angle) { if (inBounds(c, r)) state.cells.set(c+","+r, { color, type, angle: angle || 0 }); }
+function eraseCell(c, r) { if (inBounds(c, r)) state.cells.delete(c+","+r); }
+function applyBrush(c, r) {
+  if (inBounds(c, r)) setCell(c, r, state.color, state.type, orientAngle(c + 0.5, r + 0.5));
+}
+function floodFill(c, r) {
+  const start = state.cells.get(c+","+r);
+  const target = start ? start.color : null;
+  const stack = [[c, r]], seen = new Set();
+  while (stack.length) {
+    const [cc, rr] = stack.pop();
+    if (!inBounds(cc, rr)) continue;
+    const k = cc+","+rr; if (seen.has(k)) continue;
+    const cur = state.cells.get(k) || null;
+    if ((cur ? cur.color : null) !== target) continue;
+    seen.add(k); setCell(cc, rr, state.color, state.type, orientAngle(cc + 0.5, rr + 0.5));
+    stack.push([cc+1,rr],[cc-1,rr],[cc,rr+1],[cc,rr-1]);
+  }
+}
+
+// ---------- Segment ops ----------
+function segKey(a, b) {
+  const s1 = a.x+","+a.y, s2 = b.x+","+b.y;
+  return s1 <= s2 ? s1+","+s2 : s2+","+s1;
+}
+function addSeg(a, b) {
+  if (a.x === b.x && a.y === b.y) return;
+  if (!nodeIn(a) || !nodeIn(b)) return;
+  state.segs.set(segKey(a, b), { color: state.color, type: state.type });
+}
+// walk grid nodes from a to b, adding a segment between each consecutive node
+function plotNodeLine(a, b, fn) {
+  let x0 = a.x, y0 = a.y, x1 = b.x, y1 = b.y;
+  let dx = Math.abs(x1-x0), dy = -Math.abs(y1-y0);
+  let sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1, err = dx + dy;
+  let px = x0, py = y0;
+  while (true) {
+    if (x0 === x1 && y0 === y1) break;
+    const e2 = 2*err;
+    if (e2 >= dy) { err += dy; x0 += sx; }
+    if (e2 <= dx) { err += dx; y0 += sy; }
+    fn({ x: px, y: py }, { x: x0, y: y0 });
+    px = x0; py = y0;
+  }
+}
+
+// ---------- Distance helpers (for erase) ----------
+function distToSeg(px, py, x1, y1, x2, y2) {
+  const dx = x2-x1, dy = y2-y1, l2 = dx*dx + dy*dy;
+  if (l2 === 0) return Math.hypot(px-x1, py-y1);
+  let t = ((px-x1)*dx + (py-y1)*dy) / l2; t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px-(x1+t*dx), py-(y1+t*dy));
+}
+function distToPolyline(px, py, pts) {
+  let best = Infinity;
+  for (let i = 0; i < pts.length - 1; i++)
+    best = Math.min(best, distToSeg(px, py, pts[i][0], pts[i][1], pts[i+1][0], pts[i+1][1]));
+  if (pts.length === 1) best = Math.min(best, Math.hypot(px-pts[0][0], py-pts[0][1]));
+  return best;
+}
+function eraseAt(p) { eraseAtPoint(p.fx, p.fy); }
+function eraseAtPoint(fx, fy) {
+  // crochet stamps first (top-most)
+  for (let i = state.crochet.length - 1; i >= 0; i--) {
+    const st = state.crochet[i];
+    if (Math.hypot(fx - st.x, fy - st.y) < CROCHET_H * 0.55) { state.crochet.splice(i, 1); return; }
+  }
+  // guide shapes
+  for (let i = state.shapes.length - 1; i >= 0; i--) {
+    if (shapeHit(state.shapes[i], fx, fy)) {
+      if (selectedObj && selectedObj.kind === "shape" && selectedObj.ref === state.shapes[i]) { selectedObj = null; refreshPanel(); }
+      state.shapes.splice(i, 1); return;
+    }
+  }
+  // free strokes
+  for (let i = state.free.length - 1; i >= 0; i--) {
+    if (distToPolyline(fx, fy, state.free[i].pts) < Math.max(0.35, state.free[i].w || FREE_W)) {
+      state.free.splice(i, 1); return;
+    }
+  }
+  // segments
+  let best = null, bd = 0.38;
+  for (const key of state.segs.keys()) {
+    const [x1,y1,x2,y2] = key.split(",").map(Number);
+    const d = distToSeg(fx, fy, x1, y1, x2, y2);
+    if (d < bd) { bd = d; best = key; }
+  }
+  if (best) { state.segs.delete(best); return; }
+  // cell
+  eraseCell(Math.floor(fx), Math.floor(fy));
+}
+
+// ---------- Interaction ----------
+let drawing = false, panActive = false, panStart = null, scrollStart = null, spaceDown = false;
+let lastCell = null, lastNode = null, lastLoose = null, currentFree = null, preview = null, draggingCenter = null, pointerOnBoard = false;
+let selMulti = [], marquee = null;  // multi-seleção de pontos soltos + retângulo de seleção
+function groupBounds(list) {
+  let x0=Infinity, y0=Infinity, x1=-Infinity, y1=-Infinity;
+  for (const s of list) { const r = CROCHET_H*(s.scale||1)*0.5;
+    x0=Math.min(x0,s.x-r); y0=Math.min(y0,s.y-r); x1=Math.max(x1,s.x+r); y1=Math.max(y1,s.y+r); }
+  return { x0, y0, x1, y1, cx:(x0+x1)/2, cy:(y0+y1)/2 };
+}
+
+function pointerDown(e) {
+  if (e.button === 1 || state.tool === "pan" || spaceDown) {
+    panActive = true;
+    panStart = { x: e.clientX, y: e.clientY };
+    scrollStart = { x: stage.scrollLeft, y: stage.scrollTop };
+    board.style.cursor = "grabbing"; e.preventDefault(); return;
+  }
+  const p = eventToCell(e);
+
+  if (state.tool === "pick") {
+    const cur = state.cells.get(p.c + "," + p.r);
+    if (cur) { setColor(cur.color); setType(cur.type); }
+    return;
+  }
+  if (state.tool === "erase") {
+    pushUndo(); drawing = true; eraseAt(p); draw(); autosave(); return;
+  }
+  if (state.tool === "shape") {
+    pushUndo();
+    const n = nearestNode(p.fx, p.fy);
+    shapeStart = { x: n.x, y: n.y };
+    shapeDraft = createDraft(state.shapeKind, n.x, n.y, p.fx, p.fy);
+    drawing = true; draw(); return;
+  }
+  if (state.tool === "stitch") {
+    pushUndo(); placeLoose(p.fx, p.fy); lastLoose = { x: p.fx, y: p.fy }; drawing = true;
+    refreshPanel(); draw(); autosave(); return;
+  }
+  if (state.tool === "select") { selectDown(p, e); return; }
+
+  const mode = currentMode();
+  if (mode === "cell") {
+    if (state.tool === "fill") {
+      if (!inBounds(p.c, p.r)) return;
+      pushUndo(); floodFill(p.c, p.r); draw(); autosave(); return;
+    }
+    if (state.tool === "line" || state.tool === "rect") {
+      pushUndo(); preview = { type: state.tool, a: { c: p.c, r: p.r }, b: { c: p.c, r: p.r } };
+      drawing = true; draw(); return;
+    }
+    pushUndo(); drawing = true; lastCell = { c: p.c, r: p.r };
+    applyBrush(p.c, p.r); draw(); autosave(); return;
+  }
+  if (mode === "line") {
+    pushUndo(); drawing = true; lastNode = nearestNode(p.fx, p.fy); return;
+  }
+  if (mode === "free") {
+    pushUndo(); drawing = true;
+    currentFree = { color: state.color, w: FREE_W, pts: [[p.fx, p.fy]] };
+    draw(); return;
+  }
+}
+function selectDown(p, e) {
+  const u = state.cell, px = p.fx*u, py = p.fy*u, shift = e && e.shiftKey;
+  // grupo ativo: alça de girar / mover / (clique fora limpa)
+  if (selMulti.length) {
+    const gb = groupBounds(selMulti), rh = { x: gb.cx, y: gb.y0 - 1.3 };
+    if (Math.hypot(rh.x*u - px, rh.y*u - py) < 12) {
+      pushUndo(); selDrag = { mode:"grot", cx: gb.cx, cy: gb.cy, last: Math.atan2(p.fy-gb.cy, p.fx-gb.cx) }; drawing = true; return;
+    }
+    if (!shift && p.fx>=gb.x0 && p.fx<=gb.x1 && p.fy>=gb.y0 && p.fy<=gb.y1) {
+      pushUndo(); selDrag = { mode:"gmove", lx:p.fx, ly:p.fy }; drawing = true; return;
+    }
+    if (!shift) selMulti = [];
+  }
+  // 1) alça do objeto já selecionado?
+  if (selectedObj) {
+    let hs;
+    if (selectedObj.kind === "shape") hs = shapeHandles(selectedObj.ref);
+    else if (selectedObj.kind === "image") { const im = selectedObj.ref; hs = [{ id:"imgsize", x: im.x+im.w, y: im.y+im.h }]; }
+    else hs = [{ id:"loose", ...looseHandle(selectedObj.ref) }];
+    for (const h of hs) if (Math.hypot(h.x*u - px, h.y*u - py) < 11) {
+      pushUndo(); selDrag = { mode:"handle", hid: h.id }; drawing = true; return;
+    }
+  }
+  // 2) ponto solto (topo) — shift adiciona/remove do grupo
+  for (let i = state.crochet.length-1; i >= 0; i--) {
+    const st = state.crochet[i];
+    if (Math.hypot(st.x-p.fx, st.y-p.fy) < CROCHET_H*(st.scale||1)*0.6) {
+      if (shift) {
+        selectedObj = null; const idx = selMulti.indexOf(st);
+        if (idx >= 0) selMulti.splice(idx, 1); else selMulti.push(st);
+        refreshPanel(); draw(); return;
+      }
+      selectedObj = { kind:"stitch", ref: st }; selMulti = []; pushUndo();
+      selDrag = { mode:"move", lx:p.fx, ly:p.fy }; drawing = true; refreshPanel(); draw(); return;
+    }
+  }
+  // 3) forma (arrastar qualquer ponto dela move o grupo todo)
+  for (let i = state.shapes.length-1; i >= 0; i--) {
+    if (shapeHit(state.shapes[i], p.fx, p.fy)) {
+      selectedObj = { kind:"shape", ref: state.shapes[i] }; selMulti = []; pushUndo();
+      selDrag = { mode:"move", lx:p.fx, ly:p.fy }; drawing = true; refreshPanel(); draw(); return;
+    }
+  }
+  // 4) imagem de referência (camada de fundo)
+  if (state.image) {
+    const im = state.image;
+    if (p.fx >= im.x && p.fx <= im.x+im.w && p.fy >= im.y && p.fy <= im.y+im.h) {
+      selectedObj = { kind:"image", ref: im }; selMulti = []; pushUndo();
+      selDrag = { mode:"move", lx:p.fx, ly:p.fy }; drawing = true; refreshPanel(); draw(); return;
+    }
+  }
+  // 5) vazio -> retângulo de seleção
+  selectedObj = null;
+  selDrag = { mode:"marquee", x0:p.fx, y0:p.fy, x1:p.fx, y1:p.fy };
+  marquee = selDrag; drawing = true; refreshPanel(); draw();
+}
+function applyHandle(p) {
+  if (selectedObj.kind === "image") {
+    const im = selectedObj.ref;
+    im.w = Math.max(1, p.fx - im.x); im.h = Math.max(1, p.fy - im.y);
+    return;
+  }
+  if (selectedObj.kind === "stitch") {
+    const st = selectedObj.ref, dx = p.fx-st.x, dy = p.fy-st.y, d = Math.hypot(dx,dy);
+    st.angle = Math.atan2(dx, -dy);
+    st.scale = Math.max(0.3, Math.min(5, d / CROCHET_H));
+    return;
+  }
+  const s = selectedObj.ref, id = selDrag.hid, c = shapeCenter(s);
+  if (id === "r") s.r = Math.max(0.5, Math.hypot(p.fx-c.x, p.fy-c.y));
+  else if (id === "rx" || id === "ry") { const loc = rot2(p.fx-c.x, p.fy-c.y, -(s.rot||0)); if (id==="rx") s.rx = Math.max(0.5, Math.abs(loc.x)); else s.ry = Math.max(0.5, Math.abs(loc.y)); }
+  else if (id === "size") { const loc = rot2(p.fx-c.x, p.fy-c.y, -(s.rot||0)); s.w = Math.max(1, 2*Math.abs(loc.x)); s.h = Math.max(1, 2*Math.abs(loc.y)); }
+  else if (id === "rot") s.rot = Math.atan2(p.fy-c.y, p.fx-c.x) + Math.PI/2;
+  else if (id === "p1") s.p1 = { x:p.fx, y:p.fy };
+  else if (id === "p2") s.p2 = { x:p.fx, y:p.fy };
+  else if (id === "c") s.c = { x:p.fx, y:p.fy };
+}
+
+function pointerMove(e) {
+  const p = eventToCell(e);
+  coordsEl.textContent = inBounds(p.c, p.r) ? (p.c+1) + " , " + (p.r+1) : "—";
+
+  if (panActive) {
+    stage.scrollLeft = scrollStart.x - (e.clientX - panStart.x);
+    stage.scrollTop  = scrollStart.y - (e.clientY - panStart.y);
+    return;
+  }
+  if (draggingCenter) {
+    const nn = nearestNode(p.fx, p.fy);
+    draggingCenter.x = nn.x; draggingCenter.y = nn.y;
+    draw(); autosave(); return;
+  }
+  if (!drawing) return;
+
+  if (state.tool === "erase") { eraseAt(p); draw(); autosave(); return; }
+  if (state.tool === "stitch") {
+    if (!lastLoose || Math.hypot(p.fx-lastLoose.x, p.fy-lastLoose.y) >= CROCHET_H*0.55) {
+      placeLoose(p.fx, p.fy); lastLoose = { x: p.fx, y: p.fy }; refreshPanel(); draw(); autosave();
+    }
+    return;
+  }
+  if (state.tool === "shape" && shapeStart) {
+    shapeDraft = createDraft(state.shapeKind, shapeStart.x, shapeStart.y, p.fx, p.fy);
+    draw(); return;
+  }
+  if (state.tool === "select" && selDrag) {
+    if (selDrag.mode === "handle") applyHandle(p);
+    else if (selDrag.mode === "move") {
+      const dx = p.fx-selDrag.lx, dy = p.fy-selDrag.ly;
+      if (selectedObj.kind === "shape") moveShape(selectedObj.ref, dx, dy);
+      else { selectedObj.ref.x += dx; selectedObj.ref.y += dy; }
+      selDrag.lx = p.fx; selDrag.ly = p.fy;
+    }
+    else if (selDrag.mode === "marquee") { selDrag.x1 = p.fx; selDrag.y1 = p.fy; draw(); return; }
+    else if (selDrag.mode === "gmove") {
+      const dx = p.fx-selDrag.lx, dy = p.fy-selDrag.ly;
+      for (const s of selMulti) { s.x += dx; s.y += dy; }
+      selDrag.lx = p.fx; selDrag.ly = p.fy;
+    }
+    else if (selDrag.mode === "grot") {
+      const a = Math.atan2(p.fy-selDrag.cy, p.fx-selDrag.cx), d = a - selDrag.last;
+      selDrag.last = a;
+      const co = Math.cos(d), si = Math.sin(d);
+      for (const s of selMulti) {
+        const dx = s.x-selDrag.cx, dy = s.y-selDrag.cy;
+        s.x = selDrag.cx + dx*co - dy*si; s.y = selDrag.cy + dx*si + dy*co;
+        s.angle = (s.angle||0) + d;
+      }
+    }
+    draw(); autosave(); return;
+  }
+
+  if (preview) { preview.b = { c: p.c, r: p.r }; draw(); return; }
+
+  const mode = currentMode();
+  if (mode === "cell") {
+    if (lastCell) plotLine(lastCell.c, lastCell.r, p.c, p.r, (c, r) => applyBrush(c, r));
+    else applyBrush(p.c, p.r);
+    lastCell = { c: p.c, r: p.r };
+    draw(); autosave();
+  } else if (mode === "line") {
+    const n = nearestNode(p.fx, p.fy);
+    if (lastNode && (n.x !== lastNode.x || n.y !== lastNode.y)) {
+      plotNodeLine(lastNode, n, (a, b) => addSeg(a, b));
+      lastNode = n; draw(); autosave();
+    }
+  } else if (mode === "free" && currentFree) {
+    const last = currentFree.pts[currentFree.pts.length-1];
+    if (Math.hypot(p.fx-last[0], p.fy-last[1]) > 0.05) {
+      currentFree.pts.push([p.fx, p.fy]); draw(); autosave();
+    }
+  }
+}
+
+function pointerUp() {
+  if (!pointerOnBoard) return;   // ignora releases de cliques fora do canvas (ex: botões do painel)
+  pointerOnBoard = false;
+  if (panActive) {
+    panActive = false;
+    board.style.cursor = (state.tool === "pan" || spaceDown) ? "grab" : "crosshair";
+    return;
+  }
+  if (preview) { commitPreview(); preview = null; draw(); autosave(); }
+  if (currentFree) {
+    if (currentFree.pts.length >= 1) state.free.push(currentFree);
+    currentFree = null; draw(); autosave();
+  }
+  if (shapeDraft) {
+    state.shapes.push(shapeDraft);
+    selectedObj = { kind:"shape", ref: shapeDraft };
+    shapeDraft = null; shapeStart = null;
+    setTool("select"); refreshPanel(); draw(); autosave();
+  }
+  if (selDrag && selDrag.mode === "marquee") {
+    const x0 = Math.min(selDrag.x0, selDrag.x1), x1 = Math.max(selDrag.x0, selDrag.x1);
+    const y0 = Math.min(selDrag.y0, selDrag.y1), y1 = Math.max(selDrag.y0, selDrag.y1);
+    if (Math.hypot(x1-x0, y1-y0) > 0.3) {
+      // formas tocadas pelo retângulo viram pontos soltos e entram na seleção
+      let baked = false;
+      for (const s of [...state.shapes])
+        if (shapeStitches(s).some(p => p.x>=x0 && p.x<=x1 && p.y>=y0 && p.y<=y1)) { if (!baked) { pushUndo(); baked = true; } bakeShape(s); }
+      selMulti = state.crochet.filter(s => s.x>=x0 && s.x<=x1 && s.y>=y0 && s.y<=y1);
+    }
+    marquee = null;
+  }
+  drawing = false; lastCell = null; lastNode = null; lastLoose = null; draggingCenter = null; selDrag = null;
+  if (state.tool === "select") refreshPanel();
+}
+
+function commitPreview() {
+  const a = preview.a, b = preview.b;
+  if (preview.type === "line") {
+    plotLine(a.c, a.r, b.c, b.r, (c, r) => applyBrush(c, r));
+  } else if (preview.type === "rect") {
+    const c0 = Math.min(a.c,b.c), c1 = Math.max(a.c,b.c), r0 = Math.min(a.r,b.r), r1 = Math.max(a.r,b.r);
+    for (let c = c0; c <= c1; c++) { applyBrush(c, r0); applyBrush(c, r1); }
+    for (let r = r0; r <= r1; r++) { applyBrush(c0, r); applyBrush(c1, r); }
+  }
+}
+function drawPreview() {
+  const cs = state.cell;
+  ctx.save(); ctx.globalAlpha = 0.55;
+  const paint = (c, r) => { if (inBounds(c,r)) drawCellStitch(ctx, c*cs, r*cs, cs, state.color, state.type); };
+  if (preview.type === "line") plotLine(preview.a.c, preview.a.r, preview.b.c, preview.b.r, paint);
+  else if (preview.type === "rect") {
+    const a = preview.a, b = preview.b;
+    const c0 = Math.min(a.c,b.c), c1 = Math.max(a.c,b.c), r0 = Math.min(a.r,b.r), r1 = Math.max(a.r,b.r);
+    for (let c=c0;c<=c1;c++){ paint(c,r0); paint(c,r1); }
+    for (let r=r0;r<=r1;r++){ paint(c0,r); paint(c1,r); }
+  }
+  ctx.restore();
+}
+
+// Bresenham over cells
+function plotLine(c0, r0, c1, r1, fn) {
+  let dx = Math.abs(c1-c0), dy = -Math.abs(r1-r0);
+  let sx = c0 < c1 ? 1 : -1, sy = r0 < r1 ? 1 : -1, err = dx + dy;
+  while (true) {
+    fn(c0, r0);
+    if (c0 === c1 && r0 === r1) break;
+    const e2 = 2*err;
+    if (e2 >= dy) { err += dy; c0 += sx; }
+    if (e2 <= dx) { err += dx; r0 += sy; }
+  }
+}
+
+// ---------- UI: modo (bordar / crochê) ----------
+function setMode(m) {
+  state.mode = m;
+  document.body.dataset.mode = m;
+  document.querySelectorAll("#modeToggle .seg-btn").forEach(b => b.classList.toggle("active", b.dataset.mode === m));
+  if (m === "crochet") {
+    if (!state.type.startsWith("cr_")) setType("cr_dc");
+    setTool("shape");
+    state.showGrid = false; state.showCenters = true; state.showShapes = false;   // crochê: linhas + círculos azuis
+  } else {
+    if (state.type.startsWith("cr_")) setType("full");
+    setTool("brush");
+    state.showGrid = true; state.showCenters = false; state.showShapes = false;    // bordar: quadradinhos
+  }
+  renderStitchPicker();
+  refreshVisPanel();
+  autosave(); draw();
+}
+document.querySelectorAll("#modeToggle .seg-btn").forEach(b => b.addEventListener("click", () => setMode(b.dataset.mode)));
+
+// ---------- UI: tools ----------
+function setTool(t) {
+  state.tool = t;
+  document.querySelectorAll("[data-tool]").forEach(b =>
+    b.classList.toggle("active", b.dataset.tool === t));
+  board.style.cursor = (t === "pan") ? "grab" : (t === "pick" || t === "select") ? "default" : "crosshair";
+  if (t !== "select") { selectedObj = null; selMulti = []; marquee = null; refreshPanel(); }
+  if (t !== "shape") document.getElementById("shapeFlyout").classList.remove("show");
+  updateToolAvailability();
+  draw();
+}
+document.querySelectorAll("[data-tool]").forEach(b =>
+  b.addEventListener("click", () => setTool(b.dataset.tool)));
+
+// flyout de formas ao clicar na ferramenta de forma
+const shapeFlyout = document.getElementById("shapeFlyout");
+document.getElementById("shapeTool").addEventListener("click", () => {
+  const r = document.getElementById("shapeTool").getBoundingClientRect();
+  shapeFlyout.style.left = (r.right + 6) + "px";
+  shapeFlyout.style.top = r.top + "px";
+  shapeFlyout.classList.toggle("show");
+  shapeFlyout.querySelectorAll("button").forEach(b => b.classList.toggle("sel", b.dataset.kind === state.shapeKind));
+});
+shapeFlyout.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+  state.shapeKind = b.dataset.kind; setTool("shape");
+  shapeFlyout.classList.remove("show"); autosave();
+}));
+document.addEventListener("pointerdown", (e) => {
+  if (shapeFlyout.classList.contains("show") && !shapeFlyout.contains(e.target) && e.target.id !== "shapeTool" && !document.getElementById("shapeTool").contains(e.target))
+    shapeFlyout.classList.remove("show");
+});
+
+// fill/line/rect only meaningful for cell stitches
+function updateToolAvailability() {
+  const cellOnly = currentMode() !== "cell";
+  ["fill","line","rect"].forEach(t => {
+    const btn = document.querySelector('#toolbar [data-tool="'+t+'"]');
+    if (btn) btn.classList.toggle("disabled", cellOnly);
+  });
+  updateHint();
+}
+function updateHint() {
+  if (state.tool === "shape") {
+    hintEl.innerHTML = "Escolha a forma no menu <b>Crochê</b> e <b>arraste</b> a partir do centro · ela já distribui os pontos · depois use <b>⇱ Editar</b> p/ ajustar";
+    return;
+  }
+  if (state.tool === "stitch") { hintEl.innerHTML = "Clique p/ colocar um <b>ponto solto</b> · <b>⇱ Editar</b> p/ girar/redimensionar depois"; return; }
+  if (state.tool === "select") {
+    hintEl.innerHTML = "Clique numa forma/ponto p/ selecionar · <b>arraste</b> p/ mover · alças p/ redimensionar/girar · painel p/ ponto/quantidade/tamanho · <kbd>Del</kbd> exclui";
+    return;
+  }
+  const m = currentMode();
+  if (m === "crochet")
+    hintEl.innerHTML = "Use <b>◯ Forma</b> p/ distribuir pontos numa forma-guia, ou <b>• Ponto</b> p/ colocar soltos · <b>⇱ Editar</b> p/ ajustar";
+  else if (m === "line")
+    hintEl.innerHTML = "Arraste sobre o tecido para bordar a linha (encaixa nos furos da grade) · <kbd>E</kbd> borracha";
+  else if (m === "free")
+    hintEl.innerHTML = "Arraste livremente para bordar à mão · <kbd>E</kbd> borracha apaga o traço";
+  else
+    hintEl.innerHTML = "Clique e arraste para bordar · <kbd>G</kbd> balde · <kbd>I</kbd> pipeta · <kbd>L</kbd> linha · <kbd>espaço</kbd> mover";
+}
+
+// ---------- UI: painel do objeto selecionado ----------
+const objPanel = document.getElementById("objPanel");
+function shapeKindName(k) { return { circle:"Círculo", ellipse:"Elipse", rect:"Retângulo", line:"Linha", quad:"Curva" }[k] || k; }
+function crochetOptions(sel) {
+  let html = '<option value="none"'+(sel==="none"?" selected":"")+'>Só guia (sem ponto)</option>';
+  for (const t of STITCH_TYPES) if (t.mode === "crochet")
+    html += '<option value="'+t.id+'"'+(sel===t.id?" selected":"")+'>'+t.name+'</option>';
+  return html;
+}
+function refreshPanel() {
+  if (state.tool !== "select" || (!selectedObj && !selMulti.length)) { objPanel.classList.remove("show"); objPanel.innerHTML = ""; return; }
+  objPanel.classList.add("show");
+  if (selMulti.length) { buildGroupPanel(); return; }
+  if (selectedObj.kind === "shape") buildShapePanel(selectedObj.ref);
+  else if (selectedObj.kind === "image") buildImagePanel(selectedObj.ref);
+  else buildStitchPanel(selectedObj.ref);
+}
+function mirrorGroup(axis) {
+  if (!selMulti.length) return; pushUndo();
+  const gb = groupBounds(selMulti);
+  for (const s of selMulti) {
+    if (axis === "h") { s.x = 2*gb.cx - s.x; s.angle = -(s.angle||0); s.lean = -(s.lean||0); }
+    else { s.y = 2*gb.cy - s.y; s.angle = Math.PI - (s.angle||0); s.lean = -(s.lean||0); }
+  }
+  draw(); autosave();
+}
+function buildGroupPanel() {
+  const $ = id => document.getElementById(id);
+  objPanel.innerHTML =
+    '<h4>' + selMulti.length + ' pontos selecionados</h4>'
+    + '<div class="op-row"><label>Tamanho</label><input id="op-scale" type="range" min="0.3" max="4" step="0.1" value="1"><span class="op-val" id="op-scaleV">–</span></div>'
+    + '<div class="op-row"><label>Inclinar</label><input id="op-lean" type="range" min="-1" max="1" step="0.05" value="0"></div>'
+    + '<div class="op-btns"><button id="op-mh">⇋ Espelhar</button><button id="op-mv">⇅ Espelhar</button></div>'
+    + '<div class="op-btns"><button id="op-color">Cor atual</button><button id="op-del" class="danger">Excluir</button></div>'
+    + '<div style="font-size:11px;color:var(--muted);margin-top:6px;">Arraste p/ mover · alça de cima p/ girar · Cmd+C/V/D copia</div>';
+  $("op-scale").addEventListener("input", e => { const v = parseFloat(e.target.value); for (const s of selMulti) s.scale = v; $("op-scaleV").textContent = v.toFixed(1); draw(); autosave(); });
+  $("op-lean").addEventListener("input", e => { const v = parseFloat(e.target.value); for (const s of selMulti) s.lean = v; draw(); autosave(); });
+  $("op-mh").addEventListener("click", () => mirrorGroup("h"));
+  $("op-mv").addEventListener("click", () => mirrorGroup("v"));
+  $("op-color").addEventListener("click", () => { for (const s of selMulti) s.color = state.color; draw(); autosave(); });
+  $("op-del").addEventListener("click", deleteSelected);
+}
+function buildImagePanel(im) {
+  const $ = id => document.getElementById(id);
+  objPanel.innerHTML =
+    '<h4>Imagem de referência</h4>'
+    + '<div class="op-row"><label>Opacid.</label><input id="op-op" type="range" min="0.1" max="1" step="0.05" value="' + (im.opacity!=null?im.opacity:1) + '"><span class="op-val" id="op-opV">' + Math.round((im.opacity!=null?im.opacity:1)*100) + '</span></div>'
+    + '<div class="op-btns"><button id="op-del" class="danger">Remover imagem</button></div>';
+  $("op-op").addEventListener("input", e => { im.opacity = parseFloat(e.target.value); $("op-opV").textContent = Math.round(im.opacity*100); draw(); autosave(); });
+  $("op-del").addEventListener("click", deleteSelected);
+}
+function shortStitchName(id) { const t = STITCH_TYPES.find(x => x.id === id); return t ? t.name : id; }
+function renderPatternChips(s) {
+  const el = document.getElementById("op-pat"); if (!el) return;
+  if (!s.pattern || !s.pattern.length) { el.innerHTML = '<span class="pat-empty">usando só o ponto acima (sem padrão)</span>'; return; }
+  el.innerHTML = "";
+  s.pattern.forEach((id, i) => {
+    const c = document.createElement("span"); c.className = "pat-chip"; c.textContent = shortStitchName(id);
+    const x = document.createElement("b"); x.textContent = "×";
+    x.addEventListener("click", () => { s.pattern.splice(i, 1); renderPatternChips(s); draw(); autosave(); });
+    c.appendChild(x); el.appendChild(c);
+  });
+}
+function buildShapePanel(s) {
+  const closed = shapeIsClosed(s), $ = id => document.getElementById(id);
+  objPanel.innerHTML =
+    '<h4>Forma · ' + shapeKindName(s.kind) + '</h4>'
+    + '<div class="op-row"><label>Ponto</label><select id="op-stitch">' + crochetOptions(s.stitch) + '</select></div>'
+    + '<div class="op-row"><label>Padrão</label><button id="op-addpat" class="mini">+ repetir este ponto</button></div>'
+    + '<div class="op-pat" id="op-pat"></div>'
+    + '<div class="op-row"><label>Qtd</label><input id="op-count" type="number" min="1" max="300" value="' + s.count + '"></div>'
+    + '<div class="op-row"><label>Tamanho</label><input id="op-scale" type="range" min="0.3" max="3" step="0.1" value="' + (s.scale||1) + '"><span class="op-val" id="op-scaleV">' + (s.scale||1).toFixed(1) + '</span></div>'
+    + '<div class="op-row"><label>Inclinar</label><input id="op-lean" type="range" min="-1" max="1" step="0.05" value="' + (s.lean||0) + '"></div>'
+    + (closed ? '<div class="op-row"><label>Início</label><input id="op-offset" type="range" min="0" max="1" step="0.01" value="' + (s.offset||0) + '"></div>' : '')
+    + '<div class="op-btns"><button id="op-side">↻ Orientação</button><button id="op-color">Cor atual</button></div>'
+    + '<div class="op-btns"><button id="op-bake">✎ Soltar pontos</button><button id="op-del" class="danger">Excluir</button></div>';
+  renderPatternChips(s);
+  $("op-stitch").addEventListener("change", e => { s.stitch = e.target.value; draw(); autosave(); });
+  $("op-addpat").addEventListener("click", () => { if (!s.pattern) s.pattern = []; s.pattern.push($("op-stitch").value); renderPatternChips(s); draw(); autosave(); });
+  $("op-count").addEventListener("input", e => { s.count = Math.max(1, Math.min(300, parseInt(e.target.value)||1)); draw(); autosave(); });
+  $("op-scale").addEventListener("input", e => { s.scale = parseFloat(e.target.value); $("op-scaleV").textContent = s.scale.toFixed(1); draw(); autosave(); });
+  $("op-lean").addEventListener("input", e => { s.lean = parseFloat(e.target.value); draw(); autosave(); });
+  if (closed) $("op-offset").addEventListener("input", e => { s.offset = parseFloat(e.target.value); draw(); autosave(); });
+  $("op-side").addEventListener("click", () => { s.side = (s.side||1)*-1; draw(); autosave(); });
+  $("op-color").addEventListener("click", () => { s.color = state.color; draw(); autosave(); });
+  $("op-bake").addEventListener("click", () => { pushUndo(); const news = bakeShape(s); selectedObj = null; selMulti = news; refreshPanel(); draw(); autosave(); });
+  $("op-del").addEventListener("click", deleteSelected);
+}
+function buildStitchPanel(st) {
+  const $ = id => document.getElementById(id);
+  objPanel.innerHTML =
+    '<h4>Ponto solto</h4>'
+    + '<div class="op-row"><label>Tamanho</label><input id="op-scale" type="range" min="0.3" max="4" step="0.1" value="' + (st.scale||1) + '"><span class="op-val" id="op-scaleV">' + (st.scale||1).toFixed(1) + '</span></div>'
+    + '<div class="op-row"><label>Girar</label><input id="op-rot" type="range" min="0" max="360" step="1" value="' + Math.round(((st.angle||0)*180/Math.PI+360)%360) + '"></div>'
+    + '<div class="op-row"><label>Inclinar</label><input id="op-lean" type="range" min="-1" max="1" step="0.05" value="' + (st.lean||0) + '"></div>'
+    + '<div class="op-btns"><button id="op-color">Cor atual</button><button id="op-del" class="danger">Excluir</button></div>';
+  $("op-scale").addEventListener("input", e => { st.scale = parseFloat(e.target.value); $("op-scaleV").textContent = st.scale.toFixed(1); draw(); autosave(); });
+  $("op-rot").addEventListener("input", e => { st.angle = (parseFloat(e.target.value)||0)*Math.PI/180; draw(); autosave(); });
+  $("op-lean").addEventListener("input", e => { st.lean = parseFloat(e.target.value); draw(); autosave(); });
+  $("op-color").addEventListener("click", () => { st.color = state.color; draw(); autosave(); });
+  $("op-del").addEventListener("click", deleteSelected);
+}
+let clip = null;
+function copySelected() {
+  if (selMulti.length) { clip = { kind:"group", data: selMulti.map(s => JSON.parse(JSON.stringify(s))) }; return true; }
+  if (!selectedObj || selectedObj.kind === "image") return false;
+  clip = { kind: selectedObj.kind, data: JSON.parse(JSON.stringify(selectedObj.ref)) };
+  return true;
+}
+function pasteClip() {
+  if (!clip) return false;
+  pushUndo();
+  if (clip.kind === "group") {
+    const news = clip.data.map(d => { const c = JSON.parse(JSON.stringify(d)); c.x += 1.5; c.y += 1.5; state.crochet.push(c); return c; });
+    selMulti = news; selectedObj = null;
+  } else {
+    const c = JSON.parse(JSON.stringify(clip.data));
+    if (clip.kind === "shape") { c.id = shapeSeq++; moveShape(c, 1.5, 1.5); state.shapes.push(c); selectedObj = { kind:"shape", ref: c }; }
+    else { c.x += 1.5; c.y += 1.5; state.crochet.push(c); selectedObj = { kind:"stitch", ref: c }; }
+    selMulti = [];
+  }
+  if (state.tool !== "select") setTool("select");
+  refreshPanel(); draw(); autosave();
+  return true;
+}
+function deleteSelected() {
+  if (selMulti.length) {
+    pushUndo();
+    const set = new Set(selMulti);
+    state.crochet = state.crochet.filter(s => !set.has(s));
+    selMulti = []; refreshPanel(); draw(); autosave(); return;
+  }
+  if (!selectedObj) return;
+  pushUndo();
+  if (selectedObj.kind === "shape") { const i = state.shapes.indexOf(selectedObj.ref); if (i>=0) state.shapes.splice(i,1); }
+  else if (selectedObj.kind === "image") { state.image = null; }
+  else { const i = state.crochet.indexOf(selectedObj.ref); if (i>=0) state.crochet.splice(i,1); }
+  selectedObj = null; refreshPanel(); draw(); autosave();
+}
+
+// ---------- UI: color ----------
+function normHex(v) {
+  v = (v || "").trim(); if (v[0] !== "#") v = "#" + v;
+  return /^#[0-9a-fA-F]{6}$/.test(v) ? v.toLowerCase() : null;
+}
+function setColor(hex) {
+  state.color = hex;
+  document.getElementById("colorPicker").value = hex;
+  document.getElementById("currentSwatch").style.background = hex;
+  document.getElementById("hexInput").value = hex.toUpperCase();
+  document.querySelectorAll(".swatch").forEach(s => s.classList.toggle("sel", s.dataset.color === hex));
+}
+document.getElementById("colorPicker").addEventListener("input", e => setColor(e.target.value));
+document.getElementById("hexInput").addEventListener("change", e => {
+  const h = normHex(e.target.value); if (h) setColor(h); else e.target.value = state.color.toUpperCase();
+});
+// "+" da paleta abre o seletor nativo (gradiente, pipeta, hex) e salva a cor escolhida
+const addColorPicker = document.getElementById("addColorPicker");
+addColorPicker.addEventListener("input", e => {
+  const h = e.target.value;
+  setColor(h);
+  if (!state.palette.includes(h)) { state.palette.push(h); renderSwatches(); }
+  autosave();
+});
+// cor de fundo do tecido
+document.getElementById("bgPicker").addEventListener("input", e => {
+  state.bg = e.target.value; document.getElementById("bgSwatch").style.background = state.bg;
+  draw(); autosave();
+});
+
+// ---------- UI: stitch type ----------
+function setType(id) {
+  state.type = id;
+  document.querySelectorAll(".stitch-opt").forEach(o => o.classList.toggle("active", o.dataset.type === id));
+  const cro = id.startsWith("cr_");
+  // troca de ferramenta conforme o tipo escolhido
+  if (cro) { if (["brush","fill","line","rect"].includes(state.tool)) setTool("stitch"); }
+  else { if (["shape","stitch","select"].includes(state.tool)) setTool("brush"); }
+  if (currentMode() !== "cell" && ["fill","line","rect"].includes(state.tool)) setTool("brush");
+  updateToolAvailability();
+}
+
+function renderSwatches() {
+  const wrap = document.getElementById("swatches");
+  wrap.innerHTML = "";
+  state.palette.forEach((hex, i) => {
+    const s = document.createElement("div");
+    s.className = "swatch" + (hex === state.color ? " sel" : "");
+    s.style.background = hex; s.dataset.color = hex; s.title = hex;
+    s.addEventListener("click", () => setColor(hex));
+    const rm = document.createElement("div");
+    rm.className = "rm"; rm.textContent = "×";
+    rm.addEventListener("click", (e) => { e.stopPropagation(); state.palette.splice(i,1); renderSwatches(); autosave(); });
+    s.appendChild(rm); wrap.appendChild(s);
+  });
+  const add = document.createElement("div");
+  add.className = "add-swatch"; add.textContent = "+"; add.title = "Escolher uma cor e adicionar à paleta";
+  add.addEventListener("click", () => {
+    const ap = document.getElementById("addColorPicker");
+    ap.value = state.color; ap.click();
+  });
+  wrap.appendChild(add);
+}
+
+function stitchPreviewCanvas(st) {
+  const cv = document.createElement("canvas");
+  cv.width = 34; cv.height = 34;
+  const g = cv.getContext("2d");
+  g.fillStyle = "#f3ede0"; g.fillRect(0,0,34,34);
+  const col = "#c0392b";
+  if (st.mode === "cell") {
+    drawCellStitch(g, 2, 2, 30, col, st.id);
+  } else if (st.mode === "line") {
+    drawLineSeg(g, 5, 25, 29, 9, 30, col, st.id);
+  } else if (st.mode === "crochet") {
+    g.save(); g.translate(17, 30); drawCrochetSymbol(g, 26, col, st.id); g.restore();
+  } else { // free
+    const stroke = { color: col, w: 0.22, pts: [[0.2,0.75],[0.4,0.3],[0.6,0.7],[0.82,0.3]] };
+    drawFreeStroke(g, stroke, 34);
+  }
+  return cv;
+}
+function renderStitchPicker() {
+  const scroll = document.getElementById("stitchScroll");
+  scroll.innerHTML = "";
+  let lastCat = null, grid = null;
+  const wantCrochet = state.mode === "crochet";
+  STITCH_TYPES.filter(st => (st.mode === "crochet") === wantCrochet).forEach(st => {
+    if (st.cat !== lastCat) {
+      const h = document.createElement("div"); h.className = "stitch-cat"; h.textContent = st.cat;
+      scroll.appendChild(h);
+      grid = document.createElement("div"); grid.className = "stitch-grid"; scroll.appendChild(grid);
+      lastCat = st.cat;
+    }
+    const opt = document.createElement("div");
+    opt.className = "stitch-opt" + (st.id === state.type ? " active" : "");
+    opt.dataset.type = st.id;
+    opt.appendChild(stitchPreviewCanvas(st));
+    const label = document.createElement("span"); label.textContent = st.name;
+    opt.appendChild(label);
+    opt.addEventListener("click", () => setType(st.id));
+    grid.appendChild(opt);
+  });
+}
+
+// ---------- Zoom ----------
+function setZoom(cs) {
+  cs = Math.max(MIN_CELL, Math.min(MAX_CELL, cs));
+  const ratio = cs / state.cell;
+  const sx = (stage.scrollLeft + stage.clientWidth/2) * ratio - stage.clientWidth/2;
+  const sy = (stage.scrollTop + stage.clientHeight/2) * ratio - stage.clientHeight/2;
+  state.cell = cs; resizeBoard(); draw();
+  stage.scrollLeft = sx; stage.scrollTop = sy;
+  document.getElementById("zoomVal").textContent = Math.round(cs/22*100) + "%";
+}
+document.getElementById("zoomIn").addEventListener("click", () => setZoom(state.cell + 3));
+document.getElementById("zoomOut").addEventListener("click", () => setZoom(state.cell - 3));
+document.getElementById("zoomFit").addEventListener("click", fitZoom);
+function fitZoom() {
+  const availW = stage.clientWidth - 80, availH = stage.clientHeight - 80;
+  setZoom(Math.floor(Math.min(availW / state.cols, availH / state.rows)));
+}
+
+// ---------- Menu de visibilidade (olho) ----------
+const EYE_OPEN = '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>';
+const EYE_CLOSED = '<path d="M3 3l18 18"/><path d="M10.6 10.6a3 3 0 004.2 4.2"/><path d="M6.6 6.6C4.2 8.1 2 12 2 12s3.6 7 10 7c1.7 0 3.2-.4 4.5-1.1M17.4 17.4C19.7 16 22 12 22 12s-1-2-2.9-3.8"/>';
+const VIS_ITEMS = {
+  grid:    { get: () => state.showGrid,    set: v => state.showGrid = v },
+  centers: { get: () => state.showCenters, set: v => state.showCenters = v },
+  shapes:  { get: () => state.showShapes,  set: v => state.showShapes = v },
+};
+function refreshVisPanel() {
+  document.querySelectorAll("#visPanel button[data-vis]").forEach(b => {
+    const on = VIS_ITEMS[b.dataset.vis].get();
+    b.classList.toggle("off", !on);
+    b.querySelector("svg").innerHTML = on ? EYE_OPEN : EYE_CLOSED;
+  });
+}
+document.getElementById("visToggle").addEventListener("click", () => {
+  document.getElementById("visPanel").classList.toggle("show");
+});
+document.querySelectorAll("#visPanel button[data-vis]").forEach(b => b.addEventListener("click", () => {
+  const item = VIS_ITEMS[b.dataset.vis];
+  item.set(!item.get());
+  refreshVisPanel(); draw(); autosave();
+}));
+document.addEventListener("pointerdown", (e) => {
+  const panel = document.getElementById("visPanel"), toggle = document.getElementById("visToggle");
+  if (panel.classList.contains("show") && !panel.contains(e.target) && !toggle.contains(e.target))
+    panel.classList.remove("show");
+});
+
+// ---------- New / clear ----------
+const newModal = document.getElementById("newModal");
+document.getElementById("newBtn").addEventListener("click", () => {
+  document.getElementById("newCols").value = state.cols;
+  document.getElementById("newRows").value = state.rows;
+  newModal.classList.add("show");
+});
+document.getElementById("newCancel").addEventListener("click", () => newModal.classList.remove("show"));
+document.getElementById("newConfirm").addEventListener("click", () => {
+  const c = Math.max(2, Math.min(400, parseInt(document.getElementById("newCols").value) || 40));
+  const r = Math.max(2, Math.min(400, parseInt(document.getElementById("newRows").value) || 40));
+  pushUndo();
+  state.cols = c; state.rows = r; state.cells.clear(); state.segs.clear(); state.free = []; state.crochet = []; state.shapes = []; state.symCenters = []; state.image = null; imgReady = false;
+  selectedCenter = null; selectedObj = null; selMulti = []; refreshPanel(); invalidateSym();
+  newModal.classList.remove("show");
+  resizeBoard(); fitZoom(); draw(); autosave();
+});
+document.getElementById("clearBtn").addEventListener("click", () => {
+  if (!state.cells.size && !state.segs.size && !state.free.length && !state.crochet.length && !state.shapes.length && !state.image) return;
+  pushUndo(); state.cells.clear(); state.segs.clear(); state.free = []; state.crochet = []; state.shapes = []; state.image = null; imgReady = false;
+  selectedObj = null; selMulti = []; refreshPanel(); draw(); autosave();
+});
+
+document.getElementById("undoBtn").addEventListener("click", undo);
+document.getElementById("redoBtn").addEventListener("click", redo);
+
+// ---------- Exportar / baixar ----------
+function renderExportCanvas() {
+  const scale = 20;
+  const off = document.createElement("canvas");
+  off.width = state.cols * scale; off.height = state.rows * scale;
+  const g = off.getContext("2d");
+  const gc = gridColors();
+  g.fillStyle = state.bg; g.fillRect(0,0,off.width,off.height);
+  if (state.image && imgReady) {
+    g.save(); g.globalAlpha = state.image.opacity!=null?state.image.opacity:1;
+    g.drawImage(imgEl, state.image.x*scale, state.image.y*scale, state.image.w*scale, state.image.h*scale); g.restore();
+  }
+  if (state.showGrid) {
+    g.lineWidth = 1;
+    for (let c=0;c<=state.cols;c++){ g.strokeStyle = c%10===0?gc.bold:gc.thin;
+      g.beginPath(); g.moveTo(c*scale+.5,0); g.lineTo(c*scale+.5,off.height); g.stroke(); }
+    for (let r=0;r<=state.rows;r++){ g.strokeStyle = r%10===0?gc.bold:gc.thin;
+      g.beginPath(); g.moveTo(0,r*scale+.5); g.lineTo(off.width,r*scale+.5); g.stroke(); }
+  }
+  for (const [key,val] of state.cells){ const [c,r]=key.split(",").map(Number);
+    drawCellRotated(g, c, r, scale, val); }
+  for (const [key,val] of state.segs){ const [x1,y1,x2,y2]=key.split(",").map(Number);
+    drawLineSeg(g, x1*scale, y1*scale, x2*scale, y2*scale, scale, val.color, val.type); }
+  for (const s of state.free) drawFreeStroke(g, s, scale);
+  for (const s of state.shapes) {
+    const has = (s.pattern && s.pattern.length) || (s.stitch && s.stitch !== "none");
+    if (has) shapeStitches(s).forEach((p, i) => { const ty = patternType(s, i); if (!ty || ty === "none") return;
+      drawCrochetStamp(g, { type: ty, x:p.x, y:p.y, angle:p.angle, scale:s.scale, color:s.color, lean:s.lean }, scale); });
+  }
+  for (const st of state.crochet) drawCrochetStamp(g, st, scale);
+  return off;
+}
+function downloadURL(url, name) { const a = document.createElement("a"); a.download = name; a.href = url; a.click(); }
+function projectData() {
+  return { version: 6, cols: state.cols, rows: state.rows,
+    cells: [...state.cells.entries()], segs: [...state.segs.entries()], free: state.free,
+    crochet: state.crochet, shapes: state.shapes, palette: state.palette,
+    symCenters: state.symCenters, bg: state.bg, image: state.image };
+}
+const downloadFlyout = document.getElementById("downloadFlyout");
+document.getElementById("downloadTrigger").addEventListener("click", () => {
+  const r = document.getElementById("downloadTrigger").getBoundingClientRect();
+  downloadFlyout.style.left = Math.min(r.left, window.innerWidth - 160) + "px";
+  downloadFlyout.style.top = (r.bottom + 6) + "px";
+  downloadFlyout.classList.toggle("show");
+});
+downloadFlyout.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+  const fmt = b.dataset.fmt;
+  downloadFlyout.classList.remove("show");
+  if (fmt === "json") {
+    downloadURL(URL.createObjectURL(new Blob([JSON.stringify(projectData())], {type:"application/json"})), "projeto.json");
+    return;
+  }
+  const off = renderExportCanvas();
+  if (fmt === "png") downloadURL(off.toDataURL("image/png"), "desenho.png");
+  else if (fmt === "jpg") downloadURL(off.toDataURL("image/jpeg", 0.92), "desenho.jpg");
+  else if (fmt === "svg") {
+    const png = off.toDataURL("image/png");
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="'+off.width+'" height="'+off.height+'" viewBox="0 0 '+off.width+' '+off.height+'"><image href="'+png+'" width="'+off.width+'" height="'+off.height+'"/></svg>';
+    downloadURL(URL.createObjectURL(new Blob([svg], {type:"image/svg+xml"})), "desenho.svg");
+  }
+}));
+document.addEventListener("pointerdown", (e) => {
+  if (downloadFlyout.classList.contains("show") && !downloadFlyout.contains(e.target) && e.target.id !== "downloadTrigger" && !document.getElementById("downloadTrigger").contains(e.target))
+    downloadFlyout.classList.remove("show");
+});
+
+// ---------- Meus projetos (galeria salva no navegador) ----------
+const PROJECTS_KEY = "pontocruz.projects";
+function loadProjectList() {
+  try { return JSON.parse(localStorage.getItem(PROJECTS_KEY) || "[]"); } catch(e) { return []; }
+}
+function gallerySnapshot() {
+  return {
+    cols: state.cols, rows: state.rows,
+    cells: [...state.cells.entries()], segs: [...state.segs.entries()],
+    free: state.free, crochet: state.crochet, shapes: state.shapes, palette: state.palette,
+    symCenters: state.symCenters, showCenters: state.showCenters,
+    showShapes: state.showShapes, showGrid: state.showGrid, fold: state.fold,
+    type: state.type, shapeKind: state.shapeKind, mode: state.mode, bg: state.bg, image: state.image,
+  };
+}
+function makeThumb() {
+  const off = renderExportCanvas();
+  const maxW = 160;
+  const scale = Math.min(1, maxW / off.width);
+  const tw = Math.max(1, Math.round(off.width*scale)), th = Math.max(1, Math.round(off.height*scale));
+  const c = document.createElement("canvas"); c.width = tw; c.height = th;
+  c.getContext("2d").drawImage(off, 0, 0, tw, th);
+  return c.toDataURL("image/jpeg", 0.72);
+}
+function saveProjectAs(name) {
+  const list = loadProjectList();
+  list.unshift({ id: "p" + Date.now(), name, savedAt: Date.now(), thumb: makeThumb(), data: gallerySnapshot() });
+  try {
+    localStorage.setItem(PROJECTS_KEY, JSON.stringify(list));
+    return true;
+  } catch (e) {
+    alert("Não foi possível salvar: armazenamento local cheio ou indisponível.");
+    return false;
+  }
+}
+function deleteProject(id) {
+  if (!confirm("Excluir este projeto salvo? Essa ação não pode ser desfeita.")) return;
+  localStorage.setItem(PROJECTS_KEY, JSON.stringify(loadProjectList().filter(p => p.id !== id)));
+  renderProjectsList();
+}
+function applyProjectData(d) {
+  pushUndo();
+  state.cols = d.cols; state.rows = d.rows;
+  state.cells = new Map(d.cells || []);
+  state.segs = new Map(d.segs || []);
+  state.free = d.free || [];
+  state.crochet = d.crochet || [];
+  state.shapes = d.shapes || [];
+  state.image = d.image || null;
+  if (state.image) loadRefImage(state.image.src); else imgReady = false;
+  if (d.bg) { state.bg = d.bg; document.getElementById("bgPicker").value = state.bg; document.getElementById("bgSwatch").style.background = state.bg; }
+  if (d.palette) state.palette = d.palette;
+  selectedObj = null; selMulti = []; refreshPanel();
+  state.symCenters = migrateCenters(d.symCenters);
+  selectedCenter = state.symCenters[0] || null; invalidateSym();
+  if (typeof d.showCenters === "boolean") state.showCenters = d.showCenters;
+  if (typeof d.showShapes === "boolean") state.showShapes = d.showShapes;
+  if (typeof d.showGrid === "boolean") state.showGrid = d.showGrid;
+  if (d.fold) state.fold = d.fold;
+  if (d.shapeKind) state.shapeKind = d.shapeKind;
+  if (d.mode === "bordado" || d.mode === "crochet") {
+    state.mode = d.mode; document.body.dataset.mode = d.mode;
+    document.querySelectorAll("#modeToggle .seg-btn").forEach(b => b.classList.toggle("active", b.dataset.mode === d.mode));
+  }
+  if (d.type && typeInfo(d.type)) { state.type = d.type; lastCrochet = d.type.startsWith("cr_"); }
+  renderSwatches(); renderStitchPicker(); setType(state.type); refreshVisPanel();
+  resizeBoard(); fitZoom(); draw(); autosave();
+}
+function renderProjectsList() {
+  const list = loadProjectList();
+  const wrap = document.getElementById("projectsList");
+  wrap.innerHTML = "";
+  if (!list.length) { wrap.innerHTML = '<div class="proj-empty">Nenhum projeto salvo ainda.</div>'; return; }
+  for (const p of list) {
+    const row = document.createElement("div"); row.className = "proj-row";
+    const img = document.createElement("img"); img.src = p.thumb; img.alt = "";
+    const info = document.createElement("div"); info.className = "proj-info";
+    const nameEl = document.createElement("div"); nameEl.className = "proj-name"; nameEl.textContent = p.name;
+    const dateEl = document.createElement("div"); dateEl.className = "proj-date"; dateEl.textContent = new Date(p.savedAt).toLocaleString("pt-BR");
+    info.append(nameEl, dateEl);
+    const openBtn = document.createElement("button"); openBtn.className = "proj-open"; openBtn.textContent = "Abrir";
+    openBtn.addEventListener("click", () => { applyProjectData(p.data); document.getElementById("projectsModal").classList.remove("show"); });
+    const delBtn = document.createElement("button"); delBtn.className = "proj-del"; delBtn.title = "Excluir"; delBtn.textContent = "🗑";
+    delBtn.addEventListener("click", () => deleteProject(p.id));
+    row.append(img, info, openBtn, delBtn);
+    wrap.appendChild(row);
+  }
+}
+document.getElementById("projectsBtn").addEventListener("click", () => {
+  document.getElementById("projectNameInput").value = "";
+  renderProjectsList();
+  document.getElementById("projectsModal").classList.add("show");
+});
+document.getElementById("projectsClose").addEventListener("click", () => document.getElementById("projectsModal").classList.remove("show"));
+document.getElementById("projectSaveBtn").addEventListener("click", () => {
+  const name = document.getElementById("projectNameInput").value.trim() || ("Projeto " + new Date().toLocaleDateString("pt-BR"));
+  if (saveProjectAs(name)) { document.getElementById("projectNameInput").value = ""; renderProjectsList(); }
+});
+
+// ---------- Upload de imagem de referência ----------
+document.getElementById("imgBtn").addEventListener("click", () => document.getElementById("imgInput").click());
+document.getElementById("importImgBtn").addEventListener("click", () => document.getElementById("imgInput").click());
+document.getElementById("imgInput").addEventListener("change", (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const tmp = new Image();
+    tmp.onload = () => {
+      pushUndo();
+      const maxH = state.rows * 0.75;
+      let w = state.cols * 0.6, h = w * (tmp.height / tmp.width);
+      if (h > maxH) { h = maxH; w = h * (tmp.width / tmp.height); }
+      state.image = { src: reader.result, x: (state.cols-w)/2, y: (state.rows-h)/2, w, h, opacity: 1 };
+      loadRefImage(reader.result);
+      selectedObj = { kind:"image", ref: state.image };
+      setTool("select"); refreshPanel(); draw(); autosave();
+    };
+    tmp.src = reader.result;
+  };
+  reader.readAsDataURL(f); e.target.value = "";
+});
+
+// ---------- Autosave ----------
+let saveTimer = null;
+function autosave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try {
+      localStorage.setItem("pontocruz.autosave", JSON.stringify({
+        cols: state.cols, rows: state.rows,
+        cells: [...state.cells.entries()], segs: [...state.segs.entries()],
+        free: state.free, crochet: state.crochet, shapes: state.shapes, palette: state.palette,
+        symCenters: state.symCenters, showCenters: state.showCenters,
+        showShapes: state.showShapes, showGrid: state.showGrid, fold: state.fold,
+        type: state.type, shapeKind: state.shapeKind, mode: state.mode, bg: state.bg, image: state.image,
+      }));
+    } catch(e) {}
+  }, 400);
+}
+function loadAutosave() {
+  try {
+    const raw = localStorage.getItem("pontocruz.autosave"); if (!raw) return;
+    const d = JSON.parse(raw);
+    state.cols = d.cols; state.rows = d.rows;
+    state.cells = new Map(d.cells || []);
+    state.segs = new Map(d.segs || d.backs || []);
+    state.free = d.free || [];
+    state.crochet = d.crochet || [];
+    state.shapes = d.shapes || [];
+    if (d.shapeKind) state.shapeKind = d.shapeKind;
+    if (d.mode === "bordado" || d.mode === "crochet") state.mode = d.mode;
+    if (d.bg) state.bg = d.bg;
+    state.image = d.image || null;
+    if (state.image) loadRefImage(state.image.src);
+    if (d.palette) state.palette = d.palette;
+    state.symCenters = migrateCenters(d.symCenters);
+    selectedCenter = state.symCenters[0] || null; invalidateSym();
+    if (typeof d.showCenters === "boolean") state.showCenters = d.showCenters;
+    if (typeof d.showShapes === "boolean") state.showShapes = d.showShapes;
+    if (typeof d.showGrid === "boolean") state.showGrid = d.showGrid;
+    if (d.fold) state.fold = d.fold;
+    if (d.type && typeInfo(d.type)) { state.type = d.type; lastCrochet = d.type.startsWith("cr_"); }
+  } catch(e) {}
+}
+
+// ---------- Keyboard ----------
+window.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT") return;
+  const meta = e.metaKey || e.ctrlKey;
+  if (meta && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+  if (meta && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); return; }
+  if (meta && e.key.toLowerCase() === "c") { if (copySelected()) e.preventDefault(); return; }
+  if (meta && e.key.toLowerCase() === "x") { if (copySelected()) { e.preventDefault(); deleteSelected(); } return; }
+  if (meta && e.key.toLowerCase() === "v") { if (pasteClip()) e.preventDefault(); return; }
+  if (meta && e.key.toLowerCase() === "d") { if (copySelected() && pasteClip()) e.preventDefault(); return; }
+  if (e.code === "Space") { spaceDown = true; board.style.cursor = "grab"; e.preventDefault(); return; }
+  if ((e.key === "Delete" || e.key === "Backspace") && state.tool === "select" && (selectedObj || selMulti.length)) { e.preventDefault(); deleteSelected(); return; }
+  if (e.key === "Escape" && (selectedObj || selMulti.length)) { selectedObj = null; selMulti = []; refreshPanel(); draw(); return; }
+  const map = { b:"brush", e:"erase", g:"fill", v:"select", h:"pan" };
+  const t = map[e.key.toLowerCase()];
+  if (t) {
+    const allowed = state.mode === "crochet" ? ["shape","stitch","select","erase","pan"] : ["brush","erase","fill","pan","select"];
+    if (!allowed.includes(t)) return;
+    if (["fill","line","rect"].includes(t) && currentMode() !== "cell") return;
+    setTool(t);
+  }
+  if (e.key === "+" || e.key === "=") setZoom(state.cell + 3);
+  if (e.key === "-") setZoom(state.cell - 3);
+});
+window.addEventListener("keyup", (e) => {
+  if (e.code === "Space") { spaceDown = false; board.style.cursor = (state.tool === "pan") ? "grab" : "crosshair"; }
+});
+stage.addEventListener("wheel", (e) => {
+  if (e.ctrlKey || e.metaKey) { e.preventDefault(); setZoom(state.cell + (e.deltaY < 0 ? 3 : -3)); }
+}, { passive: false });
+
+// ---------- Pointer events ----------
+board.addEventListener("pointerdown", (e) => { pointerOnBoard = true; board.setPointerCapture(e.pointerId); pointerDown(e); });
+board.addEventListener("pointermove", pointerMove);
+window.addEventListener("pointerup", pointerUp);
+board.addEventListener("contextmenu", (e) => e.preventDefault());
+
+// ---------- Barra lateral ajustável ----------
+(function () {
+  const aside = document.querySelector("aside"), rez = document.getElementById("asideResizer");
+  let drag = false;
+  rez.addEventListener("pointerdown", e => { drag = true; rez.setPointerCapture(e.pointerId); e.preventDefault(); });
+  window.addEventListener("pointermove", e => {
+    if (!drag) return;
+    let w = e.clientX - aside.getBoundingClientRect().left;
+    w = Math.max(150, Math.min(480, w));
+    aside.style.width = w + "px"; draw();
+  });
+  window.addEventListener("pointerup", () => { if (drag) { drag = false; try { localStorage.setItem("pontocruz.asideW", aside.style.width); } catch(e){} } });
+})();
+(function () {
+  const sec = document.getElementById("paletteSection"), rez = document.getElementById("paletteResizer");
+  let drag = false, sy = 0, sh = 0;
+  rez.addEventListener("pointerdown", e => { drag = true; sy = e.clientY; sh = sec.getBoundingClientRect().height; rez.setPointerCapture(e.pointerId); e.preventDefault(); });
+  window.addEventListener("pointermove", e => {
+    if (!drag) return;
+    let h = sh + (e.clientY - sy); h = Math.max(58, Math.min(460, h));
+    sec.style.height = h + "px";
+  });
+  window.addEventListener("pointerup", () => { if (drag) { drag = false; try { localStorage.setItem("pontocruz.paletteH", sec.style.height); } catch(e){} } });
+})();
+function applySavedLayout() {
+  try {
+    const w = localStorage.getItem("pontocruz.asideW"); if (w) document.querySelector("aside").style.width = w;
+    const h = localStorage.getItem("pontocruz.paletteH"); if (h) document.getElementById("paletteSection").style.height = h;
+  } catch(e) {}
+}
+
+// ---------- Init ----------
+const RESET_TOKEN = "2026-08-22-centro-unico"; // limpeza única: deixa só 1 centro no meio
+function init() {
+  loadAutosave();
+  // reset one-shot: descarta o monte de centros e deixa só um no centro do desenho
+  try {
+    if (localStorage.getItem("pontocruz.reset") !== RESET_TOKEN) {
+      state.symCenters = [{ x: Math.round(state.cols/2), y: Math.round(state.rows/2), spokes: state.fold, hidden: false }];
+      selectedCenter = state.symCenters[0];
+      localStorage.setItem("pontocruz.reset", RESET_TOKEN);
+      autosave();
+    }
+  } catch (e) {}
+  renderSwatches();
+  setColor(state.color);
+  document.getElementById("bgPicker").value = state.bg;
+  document.getElementById("bgSwatch").style.background = state.bg;
+  refreshVisPanel();
+  document.body.dataset.mode = state.mode;
+  document.querySelectorAll("#modeToggle .seg-btn").forEach(b => b.classList.toggle("active", b.dataset.mode === state.mode));
+  renderStitchPicker();
+  setType(state.type);
+  setTool(state.tool);
+  refreshPanel();
+  applySavedLayout();
+  resizeBoard(); draw(); fitZoom();
+  updateUndoButtons();
+}
+window.addEventListener("resize", draw);
+init();
+</script>
+</body>
+</html>
