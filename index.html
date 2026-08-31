@@ -1913,8 +1913,12 @@ function buildCellSelPanel() {
       + '<label class="current-swatch sm" id="cellCustomSwatch" title="Escolher outra cor (gradiente, pipeta e hex)"><input type="color" id="cellCustomPicker" value="' + state.color + '"></label>'
       + '</div>';
   }
+  const b = cellSelBounds(cellSel);
+  const w = b.c1 - b.c0 + 1, h = b.r1 - b.r0 + 1;
   document.getElementById("cellSelBody").innerHTML =
-    '<div style="font-size:12px;margin-bottom:8px;">' + cellSel.size + ' ponto(s) selecionado(s)</div>'
+    '<div style="font-size:12px;margin-bottom:2px;">' + cellSel.size + ' ponto(s) selecionado(s)</div>'
+    + '<div style="font-size:11px;color:var(--accent);margin-bottom:2px;">Quinas: (' + (b.c0+1) + ',' + (b.r0+1) + ') a (' + (b.c1+1) + ',' + (b.r1+1) + ')</div>'
+    + '<div style="font-size:11px;color:var(--accent);margin-bottom:8px;">Dimensões: ' + w + ' × ' + h + ' pontos</div>'
     + '<div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Cores nesta área — clique numa para trocar</div>'
     + '<div class="swatches" id="op-cellcolors" style="max-height:88px;">' + colorsHtml + '</div>'
     + editHtml
