@@ -595,8 +595,8 @@ function gridColors() {
   const n = parseInt((state.bg || "#f3ede0").slice(1), 16);
   const L = 0.299*((n>>16)&255) + 0.587*((n>>8)&255) + 0.114*(n&255);
   return L > 140
-    ? { thin:"rgba(0,0,0,0.16)", bold:"rgba(0,0,0,0.42)", hole:"rgba(60,45,25,0.12)" }
-    : { thin:"rgba(255,255,255,0.18)", bold:"rgba(255,255,255,0.5)", hole:"rgba(255,255,255,0.14)" };
+    ? { thin:"rgba(0,0,0,0.16)", mid:"rgba(0,0,0,0.38)", bold:"rgba(0,0,0,0.42)", hole:"rgba(60,45,25,0.12)" }
+    : { thin:"rgba(255,255,255,0.18)", mid:"rgba(255,255,255,0.42)", bold:"rgba(255,255,255,0.5)", hole:"rgba(255,255,255,0.14)" };
 }
 const CROCHET_H = 1.5;       // altura base do ponto (em células)
 let lastCrochet = false; // tracks crochet<->outros p/ auto-troca grade/guias
@@ -634,7 +634,7 @@ function restore(snap) {
   state.shapes = d.shapes || [];
   state.image = d.image || null;
   if (state.image) loadRefImage(state.image.src); else imgReady = false;
-  selectedObj = null; selMulti = []; refreshPanel();
+  selectedObj = null; selMulti = []; cellSel = new Set(); cellDrag = null; cellMarquee = null; refreshPanel();
   state.symCenters = migrateCenters(d.symCenters);
   selectedCenter = state.symCenters[0] || null; invalidateSym();
   resizeBoard(); draw(); autosave();
@@ -1132,15 +1132,20 @@ function doDraw() {
       }
   }
   if (state.showGrid) {
-    ctx.lineWidth = 1; ctx.setLineDash([]);
+    ctx.setLineDash([]);
     for (let c = 0; c <= state.cols; c++) {
-      ctx.strokeStyle = c % 10 === 0 ? gc.bold : gc.thin;
+      const bold10 = c % 10 === 0, bold5 = c % 5 === 0;
+      ctx.strokeStyle = bold10 ? gc.bold : bold5 ? gc.mid : gc.thin;
+      ctx.lineWidth = bold10 ? 1.6 : bold5 ? 1.3 : 1;
       ctx.beginPath(); ctx.moveTo(c*cs + .5, 0); ctx.lineTo(c*cs + .5, H); ctx.stroke();
     }
     for (let r = 0; r <= state.rows; r++) {
-      ctx.strokeStyle = r % 10 === 0 ? gc.bold : gc.thin;
+      const bold10 = r % 10 === 0, bold5 = r % 5 === 0;
+      ctx.strokeStyle = bold10 ? gc.bold : bold5 ? gc.mid : gc.thin;
+      ctx.lineWidth = bold10 ? 1.6 : bold5 ? 1.3 : 1;
       ctx.beginPath(); ctx.moveTo(0, r*cs + .5); ctx.lineTo(W, r*cs + .5); ctx.stroke();
     }
+    ctx.lineWidth = 1;
   }
   for (const [key, val] of state.cells) {
     const [c, r] = key.split(",").map(Number);
@@ -1155,6 +1160,31 @@ function doDraw() {
   if (state.mode === "crochet") drawRadialGuide(ctx, cs);
   drawCrochetLayer(ctx, cs);
   if (preview) drawPreview();
+  drawCellSelectionLayer(ctx, cs);
+}
+
+// ---------- Cell selection overlay (modo ponto cruz) ----------
+function drawCellSelectionLayer(g, cs) {
+  if (state.tool !== "select" || currentMode() !== "cell") return;
+  g.save();
+  if (cellSel.size) {
+    g.fillStyle = "rgba(124,156,255,0.28)";
+    for (const key of cellSel) {
+      const [c, r] = key.split(",").map(Number);
+      g.fillRect(c*cs, r*cs, cs, cs);
+    }
+    const b = cellSelBounds(cellSel);
+    g.setLineDash([5,4]); g.strokeStyle = "rgba(124,156,255,0.9)"; g.lineWidth = 1.5;
+    g.strokeRect(b.c0*cs, b.r0*cs, (b.c1-b.c0+1)*cs, (b.r1-b.r0+1)*cs);
+    g.setLineDash([]);
+  }
+  if (cellMarquee) {
+    const x = Math.min(cellMarquee.x0,cellMarquee.x1)*cs, y = Math.min(cellMarquee.y0,cellMarquee.y1)*cs;
+    const w = Math.abs(cellMarquee.x1-cellMarquee.x0)*cs, h = Math.abs(cellMarquee.y1-cellMarquee.y0)*cs;
+    g.setLineDash([4,3]); g.strokeStyle = "rgba(124,156,255,0.9)"; g.lineWidth = 1;
+    g.fillStyle = "rgba(124,156,255,0.10)"; g.fillRect(x,y,w,h); g.strokeRect(x,y,w,h); g.setLineDash([]);
+  }
+  g.restore();
 }
 
 // ---------- Coord helpers ----------
@@ -1205,7 +1235,7 @@ function drawRadialGuide(g, u) {
 
 // ---------- Cell ops ----------
 function setCell(c, r, color, type, angle) { if (inBounds(c, r)) state.cells.set(c+","+r, { color, type, angle: angle || 0 }); }
-function eraseCell(c, r) { if (inBounds(c, r)) state.cells.delete(c+","+r); }
+function eraseCell(c, r) { if (inBounds(c, r)) { state.cells.delete(c+","+r); cellSel.delete(c+","+r); } }
 function applyBrush(c, r) {
   if (inBounds(c, r)) setCell(c, r, state.color, state.type, orientAngle(c + 0.5, r + 0.5));
 }
@@ -1300,6 +1330,30 @@ function eraseAtPoint(fx, fy) {
 let drawing = false, panActive = false, panStart = null, scrollStart = null, spaceDown = false;
 let lastCell = null, lastNode = null, lastLoose = null, currentFree = null, preview = null, draggingCenter = null, pointerOnBoard = false;
 let selMulti = [], marquee = null;  // multi-seleção de pontos soltos + retângulo de seleção
+let cellSel = new Set(), cellDrag = null, cellMarquee = null;  // seleção/arraste de pontos no modo célula (ponto cruz)
+function cellSelBounds(sel) {
+  let c0=Infinity, r0=Infinity, c1=-Infinity, r1=-Infinity;
+  for (const key of sel) { const [c,r] = key.split(",").map(Number); c0=Math.min(c0,c); r0=Math.min(r0,r); c1=Math.max(c1,c); r1=Math.max(r1,r); }
+  return { c0, r0, c1, r1 };
+}
+function moveCellSelection(dc, dr) {
+  if (!cellSel.size) return;
+  const b = cellSelBounds(cellSel);
+  dc = Math.max(-b.c0, Math.min(state.cols-1-b.c1, dc));
+  dr = Math.max(-b.r0, Math.min(state.rows-1-b.r1, dr));
+  if (!dc && !dr) return;
+  const moved = [];
+  for (const key of cellSel) {
+    const val = state.cells.get(key);
+    if (!val) continue;
+    const [c, r] = key.split(",").map(Number);
+    moved.push({ c: c+dc, r: r+dr, val });
+  }
+  for (const key of cellSel) state.cells.delete(key);
+  const next = new Set();
+  for (const m of moved) { const k = m.c+","+m.r; state.cells.set(k, m.val); next.add(k); }
+  cellSel = next;
+}
 function groupBounds(list) {
   let x0=Infinity, y0=Infinity, x1=-Infinity, y1=-Infinity;
   for (const s of list) { const r = CROCHET_H*(s.scale||1)*0.5;
@@ -1359,7 +1413,28 @@ function pointerDown(e) {
     draw(); return;
   }
 }
+function cellSelectDown(p, e) {
+  const shift = e && e.shiftKey;
+  const key = p.c + "," + p.r;
+  const hasStitch = inBounds(p.c, p.r) && state.cells.has(key);
+  if (shift && hasStitch) {
+    if (cellSel.has(key)) cellSel.delete(key); else cellSel.add(key);
+    refreshPanel(); draw(); return;
+  }
+  if (hasStitch && cellSel.has(key)) {
+    pushUndo(); cellDrag = { lc: p.c, lr: p.r }; drawing = true; return;
+  }
+  if (hasStitch) {
+    if (!shift) cellSel.clear();
+    cellSel.add(key);
+    pushUndo(); cellDrag = { lc: p.c, lr: p.r }; drawing = true; refreshPanel(); draw(); return;
+  }
+  if (!shift) cellSel.clear();
+  cellMarquee = { x0: p.fx, y0: p.fy, x1: p.fx, y1: p.fy };
+  drawing = true; refreshPanel(); draw();
+}
 function selectDown(p, e) {
+  if (currentMode() === "cell") { cellSelectDown(p, e); return; }
   const u = state.cell, px = p.fx*u, py = p.fy*u, shift = e && e.shiftKey;
   // grupo ativo: alça de girar / mover / (clique fora limpa)
   if (selMulti.length) {
@@ -1464,6 +1539,14 @@ function pointerMove(e) {
     shapeDraft = createDraft(state.shapeKind, shapeStart.x, shapeStart.y, p.fx, p.fy);
     draw(); return;
   }
+  if (state.tool === "select" && currentMode() === "cell") {
+    if (cellDrag) {
+      const dc = p.c - cellDrag.lc, dr = p.r - cellDrag.lr;
+      if (dc || dr) { moveCellSelection(dc, dr); cellDrag.lc = p.c; cellDrag.lr = p.r; draw(); autosave(); }
+      return;
+    }
+    if (cellMarquee) { cellMarquee.x1 = p.fx; cellMarquee.y1 = p.fy; draw(); return; }
+  }
   if (state.tool === "select" && selDrag) {
     if (selDrag.mode === "handle") applyHandle(p);
     else if (selDrag.mode === "move") {
@@ -1544,6 +1627,20 @@ function pointerUp() {
     }
     marquee = null;
   }
+  if (cellMarquee) {
+    const x0 = Math.min(cellMarquee.x0, cellMarquee.x1), x1 = Math.max(cellMarquee.x0, cellMarquee.x1);
+    const y0 = Math.min(cellMarquee.y0, cellMarquee.y1), y1 = Math.max(cellMarquee.y0, cellMarquee.y1);
+    if (Math.hypot(x1-x0, y1-y0) > 0.15) {
+      const found = new Set();
+      for (const key of state.cells.keys()) {
+        const [c, r] = key.split(",").map(Number);
+        if (c+1>x0 && c<x1 && r+1>y0 && r<y1) found.add(key);
+      }
+      cellSel = found;
+    }
+    cellMarquee = null;
+  }
+  cellDrag = null;
   drawing = false; lastCell = null; lastNode = null; lastLoose = null; draggingCenter = null; selDrag = null;
   if (state.tool === "select") refreshPanel();
 }
@@ -1611,7 +1708,7 @@ function setTool(t) {
   document.querySelectorAll("[data-tool]").forEach(b =>
     b.classList.toggle("active", b.dataset.tool === t));
   board.style.cursor = (t === "pan") ? "grab" : (t === "pick" || t === "select") ? "default" : "crosshair";
-  if (t !== "select") { selectedObj = null; selMulti = []; marquee = null; refreshPanel(); }
+  if (t !== "select") { selectedObj = null; selMulti = []; marquee = null; cellSel = new Set(); cellDrag = null; cellMarquee = null; refreshPanel(); }
   if (t !== "shape") document.getElementById("shapeFlyout").classList.remove("show");
   updateToolAvailability();
   draw();
@@ -1771,6 +1868,12 @@ function buildStitchPanel(st) {
 }
 let clip = null;
 function copySelected() {
+  if (cellSel.size) {
+    const b = cellSelBounds(cellSel);
+    const data = [...cellSel].map(key => { const [c,r] = key.split(",").map(Number); return { c: c-b.c0, r: r-b.r0, val: JSON.parse(JSON.stringify(state.cells.get(key))) }; });
+    clip = { kind:"cells", data };
+    return true;
+  }
   if (selMulti.length) { clip = { kind:"group", data: selMulti.map(s => JSON.parse(JSON.stringify(s))) }; return true; }
   if (!selectedObj || selectedObj.kind === "image") return false;
   clip = { kind: selectedObj.kind, data: JSON.parse(JSON.stringify(selectedObj.ref)) };
@@ -1779,7 +1882,18 @@ function copySelected() {
 function pasteClip() {
   if (!clip) return false;
   pushUndo();
-  if (clip.kind === "group") {
+  if (clip.kind === "cells") {
+    const off = 2;
+    const news = new Set();
+    for (const d of clip.data) {
+      const c = d.c+off, r = d.r+off;
+      if (!inBounds(c, r)) continue;
+      const k = c+","+r;
+      state.cells.set(k, JSON.parse(JSON.stringify(d.val)));
+      news.add(k);
+    }
+    cellSel = news; selMulti = []; selectedObj = null;
+  } else if (clip.kind === "group") {
     const news = clip.data.map(d => { const c = JSON.parse(JSON.stringify(d)); c.x += 1.5; c.y += 1.5; state.crochet.push(c); return c; });
     selMulti = news; selectedObj = null;
   } else {
@@ -1793,6 +1907,11 @@ function pasteClip() {
   return true;
 }
 function deleteSelected() {
+  if (cellSel.size) {
+    pushUndo();
+    for (const key of cellSel) state.cells.delete(key);
+    cellSel = new Set(); refreshPanel(); draw(); autosave(); return;
+  }
   if (selMulti.length) {
     pushUndo();
     const set = new Set(selMulti);
@@ -2104,7 +2223,7 @@ function applyProjectData(d) {
   if (state.image) loadRefImage(state.image.src); else imgReady = false;
   if (d.bg) { state.bg = d.bg; document.getElementById("bgPicker").value = state.bg; document.getElementById("bgSwatch").style.background = state.bg; }
   if (d.palette) state.palette = d.palette;
-  selectedObj = null; selMulti = []; refreshPanel();
+  selectedObj = null; selMulti = []; cellSel = new Set(); cellDrag = null; cellMarquee = null; refreshPanel();
   state.symCenters = migrateCenters(d.symCenters);
   selectedCenter = state.symCenters[0] || null; invalidateSym();
   if (typeof d.showCenters === "boolean") state.showCenters = d.showCenters;
@@ -2228,8 +2347,8 @@ window.addEventListener("keydown", (e) => {
   if (meta && e.key.toLowerCase() === "v") { if (pasteClip()) e.preventDefault(); return; }
   if (meta && e.key.toLowerCase() === "d") { if (copySelected() && pasteClip()) e.preventDefault(); return; }
   if (e.code === "Space") { spaceDown = true; board.style.cursor = "grab"; e.preventDefault(); return; }
-  if ((e.key === "Delete" || e.key === "Backspace") && state.tool === "select" && (selectedObj || selMulti.length)) { e.preventDefault(); deleteSelected(); return; }
-  if (e.key === "Escape" && (selectedObj || selMulti.length)) { selectedObj = null; selMulti = []; refreshPanel(); draw(); return; }
+  if ((e.key === "Delete" || e.key === "Backspace") && state.tool === "select" && (selectedObj || selMulti.length || cellSel.size)) { e.preventDefault(); deleteSelected(); return; }
+  if (e.key === "Escape" && (selectedObj || selMulti.length || cellSel.size)) { selectedObj = null; selMulti = []; cellSel = new Set(); refreshPanel(); draw(); return; }
   const map = { b:"brush", e:"erase", g:"fill", v:"select", h:"pan" };
   const t = map[e.key.toLowerCase()];
   if (t) {
