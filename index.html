@@ -1131,9 +1131,20 @@ function drawCellRotated(g, c, r, u, val) {
 // ---------- Main draw ----------
 let rafPending = false;
 function draw() { if (!rafPending) { rafPending = true; requestAnimationFrame(doDraw); } }
+// intervalo de colunas/linhas visíveis na área de rolagem (evita redesenhar a grade inteira
+// fora da tela — em projetos grandes com zoom alto isso é o principal gargalo de performance)
+function visibleCellRange(cs) {
+  const br = board.getBoundingClientRect(), sr = stage.getBoundingClientRect();
+  const c0 = Math.max(0, Math.floor((sr.left - br.left) / cs) - 2);
+  const r0 = Math.max(0, Math.floor((sr.top - br.top) / cs) - 2);
+  const c1 = Math.min(state.cols, Math.ceil((sr.right - br.left) / cs) + 2);
+  const r1 = Math.min(state.rows, Math.ceil((sr.bottom - br.top) / cs) + 2);
+  return { c0, r0, c1, r1 };
+}
 function doDraw() {
   rafPending = false;
   const cs = state.cell, W = state.cols * cs, H = state.rows * cs, gc = gridColors();
+  const vr = visibleCellRange(cs);
   ctx.fillStyle = state.bg; ctx.fillRect(0, 0, W, H);
   if (state.image && imgReady) {
     ctx.save(); ctx.globalAlpha = state.image.opacity != null ? state.image.opacity : 1;
@@ -1142,20 +1153,20 @@ function doDraw() {
   }
   if (state.showGrid && cs >= 10) {
     ctx.fillStyle = gc.hole;
-    for (let c = 0; c <= state.cols; c++)
-      for (let r = 0; r <= state.rows; r++) {
+    for (let c = vr.c0; c <= vr.c1; c++)
+      for (let r = vr.r0; r <= vr.r1; r++) {
         ctx.beginPath(); ctx.arc(c*cs, r*cs, Math.max(0.8, cs*0.06), 0, Math.PI*2); ctx.fill();
       }
   }
   if (state.showGrid) {
     ctx.setLineDash([]);
-    for (let c = 0; c <= state.cols; c++) {
+    for (let c = vr.c0; c <= vr.c1; c++) {
       const bold10 = c % 10 === 0, bold5 = c % 5 === 0;
       ctx.strokeStyle = bold10 ? gc.bold : bold5 ? gc.mid : gc.thin;
       ctx.lineWidth = bold10 ? 1.6 : bold5 ? 1.3 : 1;
       ctx.beginPath(); ctx.moveTo(c*cs + .5, 0); ctx.lineTo(c*cs + .5, H); ctx.stroke();
     }
-    for (let r = 0; r <= state.rows; r++) {
+    for (let r = vr.r0; r <= vr.r1; r++) {
       const bold10 = r % 10 === 0, bold5 = r % 5 === 0;
       ctx.strokeStyle = bold10 ? gc.bold : bold5 ? gc.mid : gc.thin;
       ctx.lineWidth = bold10 ? 1.6 : bold5 ? 1.3 : 1;
