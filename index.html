@@ -1191,6 +1191,21 @@ function doDraw() {
 }
 
 // ---------- Cell selection overlay (modo ponto cruz) ----------
+// rótulo com fundo, usado nas quinas/arestas da caixa de seleção
+function drawSelLabel(g, text, x, y, hAlign, vAlign) {
+  g.font = "600 11px -apple-system, BlinkMacSystemFont, sans-serif";
+  const padX = 6, boxH = 17;
+  const tw = g.measureText(text).width;
+  const boxW = tw + padX*2;
+  let boxX = hAlign === "left" ? x : hAlign === "right" ? x - boxW : x - boxW/2;
+  let boxY = vAlign === "top" ? y : vAlign === "bottom" ? y - boxH : y - boxH/2;
+  g.fillStyle = "rgba(30,33,44,0.94)";
+  g.strokeStyle = "rgba(124,156,255,0.9)"; g.lineWidth = 1;
+  if (g.roundRect) { g.beginPath(); g.roundRect(boxX, boxY, boxW, boxH, 5); g.fill(); g.stroke(); }
+  else { g.fillRect(boxX, boxY, boxW, boxH); g.strokeRect(boxX, boxY, boxW, boxH); }
+  g.fillStyle = "#aebfff"; g.textAlign = "left"; g.textBaseline = "middle";
+  g.fillText(text, boxX + padX, boxY + boxH/2 + 0.5);
+}
 function drawCellSelectionLayer(g, cs) {
   if (state.tool !== "select" || currentMode() !== "cell") return;
   g.save();
@@ -1201,9 +1216,14 @@ function drawCellSelectionLayer(g, cs) {
       g.fillRect(c*cs, r*cs, cs, cs);
     }
     const b = cellSelBounds(cellSel);
+    const x0 = b.c0*cs, y0 = b.r0*cs, x1 = (b.c1+1)*cs, y1 = (b.r1+1)*cs;
     g.setLineDash([5,4]); g.strokeStyle = "rgba(124,156,255,0.9)"; g.lineWidth = 1.5;
-    g.strokeRect(b.c0*cs, b.r0*cs, (b.c1-b.c0+1)*cs, (b.r1-b.r0+1)*cs);
+    g.strokeRect(x0, y0, x1-x0, y1-y0);
     g.setLineDash([]);
+    drawSelLabel(g, "(" + (b.c0+1) + "," + (b.r0+1) + ")", x0+4, y0+4, "left", "top");
+    drawSelLabel(g, "(" + (b.c1+1) + "," + (b.r1+1) + ")", x1-4, y1-4, "right", "bottom");
+    drawSelLabel(g, String(b.c1-b.c0+1), (x0+x1)/2, y0, "center", "middle");
+    drawSelLabel(g, String(b.r1-b.r0+1), x0, (y0+y1)/2, "center", "middle");
   }
   if (cellMarquee) {
     const x = Math.min(cellMarquee.x0,cellMarquee.x1)*cs, y = Math.min(cellMarquee.y0,cellMarquee.y1)*cs;
@@ -1932,12 +1952,8 @@ function buildCellSelPanel() {
       + '<label class="current-swatch sm" id="cellCustomSwatch" title="Escolher outra cor (gradiente, pipeta e hex)"><input type="color" id="cellCustomPicker" value="' + state.color + '"></label>'
       + '</div>';
   }
-  const b = cellSelBounds(cellSel);
-  const w = b.c1 - b.c0 + 1, h = b.r1 - b.r0 + 1;
   document.getElementById("cellSelBody").innerHTML =
-    '<div style="font-size:12px;margin-bottom:2px;">' + cellSel.size + ' ponto(s) selecionado(s)</div>'
-    + '<div style="font-size:11px;color:var(--accent);margin-bottom:2px;">Quinas: (' + (b.c0+1) + ',' + (b.r0+1) + ') a (' + (b.c1+1) + ',' + (b.r1+1) + ')</div>'
-    + '<div style="font-size:11px;color:var(--accent);margin-bottom:8px;">Dimensões: ' + w + ' × ' + h + ' pontos</div>'
+    '<div style="font-size:12px;margin-bottom:8px;">' + cellSel.size + ' ponto(s) selecionado(s)</div>'
     + '<div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Cores nesta área — clique numa para trocar</div>'
     + '<div class="swatches" id="op-cellcolors" style="max-height:88px;">' + colorsHtml + '</div>'
     + editHtml
