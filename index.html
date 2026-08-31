@@ -611,6 +611,12 @@ let lastCrochet = false; // tracks crochet<->outros p/ auto-troca grade/guias
 
 const MIN_CELL = 6, MAX_CELL = 60;
 const FREE_W = 0.22; // freehand thread thickness in cell fractions
+// limite seguro (px) p/ largura/altura do canvas — acima disso alguns navegadores
+// falham em alocar o backing store e o canvas fica todo em branco
+const CANVAS_MAX_DIM = 16000;
+function maxSafeCell() {
+  return Math.max(MIN_CELL, Math.floor(CANVAS_MAX_DIM / Math.max(state.cols, state.rows, 1)));
+}
 
 const board = document.getElementById("board");
 const ctx = board.getContext("2d");
@@ -675,8 +681,10 @@ function updateUndoButtons() {
 function resizeBoard() {
   const cs = state.cell;
   const w = state.cols * cs, h = state.rows * cs;
-  const dpr = window.devicePixelRatio || 1;
-  board.width = w * dpr; board.height = h * dpr;
+  let dpr = window.devicePixelRatio || 1;
+  const maxSide = Math.max(w, h);
+  if (maxSide * dpr > CANVAS_MAX_DIM) dpr = Math.max(1, CANVAS_MAX_DIM / maxSide);
+  board.width = Math.round(w * dpr); board.height = Math.round(h * dpr);
   board.style.width = w + "px"; board.style.height = h + "px";
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
@@ -2116,7 +2124,7 @@ function renderStitchPicker() {
 
 // ---------- Zoom ----------
 function setZoom(cs) {
-  cs = Math.max(MIN_CELL, Math.min(MAX_CELL, cs));
+  cs = Math.max(MIN_CELL, Math.min(MAX_CELL, maxSafeCell(), cs));
   const ratio = cs / state.cell;
   const sx = (stage.scrollLeft + stage.clientWidth/2) * ratio - stage.clientWidth/2;
   const sy = (stage.scrollTop + stage.clientHeight/2) * ratio - stage.clientHeight/2;
@@ -2190,7 +2198,7 @@ document.getElementById("redoBtn").addEventListener("click", redo);
 // ---------- Exportar / baixar ----------
 function renderExportCanvas(includeGrid) {
   if (includeGrid == null) includeGrid = state.showGrid;
-  const scale = 20;
+  const scale = Math.max(1, Math.min(20, Math.floor(CANVAS_MAX_DIM / Math.max(state.cols, state.rows, 1))));
   const off = document.createElement("canvas");
   off.width = state.cols * scale; off.height = state.rows * scale;
   const g = off.getContext("2d");
