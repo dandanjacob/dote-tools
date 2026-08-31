@@ -408,6 +408,10 @@
         </div>
         <input type="color" id="addColorPicker" style="display:none">
       </div>
+      <div class="aside-section" id="cellSelSection" style="display:none;">
+        <h2>Seleção</h2>
+        <div id="cellSelBody"></div>
+      </div>
       <div class="aside-section palette-section" id="paletteSection">
         <h2>Paleta</h2>
         <div class="swatches" id="swatches"></div>
@@ -474,6 +478,10 @@
 
 <!-- flyout de formatos de download (abre ao clicar na seta de baixar) -->
 <div id="downloadFlyout">
+  <label id="exportGridLabel" style="display:flex;align-items:center;gap:7px;padding:6px 10px;font-size:12px;color:var(--muted);cursor:pointer;">
+    <input type="checkbox" id="exportGridChk" checked> Incluir malha
+  </label>
+  <div style="height:1px;background:var(--border);margin:2px 4px;"></div>
   <button data-fmt="png">PNG</button>
   <button data-fmt="jpg">JPG</button>
   <button data-fmt="svg">SVG</button>
@@ -1425,11 +1433,11 @@ function cellSelectDown(p, e) {
     pushUndo(); cellDrag = { lc: p.c, lr: p.r }; drawing = true; return;
   }
   if (hasStitch) {
-    if (!shift) cellSel.clear();
+    if (!shift) { cellSel.clear(); cellRecolorFrom = null; }
     cellSel.add(key);
     pushUndo(); cellDrag = { lc: p.c, lr: p.r }; drawing = true; refreshPanel(); draw(); return;
   }
-  if (!shift) cellSel.clear();
+  if (!shift) { cellSel.clear(); cellRecolorFrom = null; }
   cellMarquee = { x0: p.fx, y0: p.fy, x1: p.fx, y1: p.fy };
   drawing = true; refreshPanel(); draw();
 }
@@ -1774,7 +1782,19 @@ function crochetOptions(sel) {
   return html;
 }
 function refreshPanel() {
-  if (state.tool !== "select" || (!selectedObj && !selMulti.length)) { objPanel.classList.remove("show"); objPanel.innerHTML = ""; return; }
+  const cellSelSection = document.getElementById("cellSelSection");
+  if (state.tool !== "select" || (!selectedObj && !selMulti.length && !cellSel.size)) {
+    objPanel.classList.remove("show"); objPanel.innerHTML = "";
+    cellSelSection.style.display = "none"; document.getElementById("cellSelBody").innerHTML = "";
+    cellRecolorFrom = null; return;
+  }
+  if (cellSel.size) {
+    objPanel.classList.remove("show"); objPanel.innerHTML = "";
+    cellSelSection.style.display = "block";
+    buildCellSelPanel();
+    return;
+  }
+  cellSelSection.style.display = "none"; document.getElementById("cellSelBody").innerHTML = "";
   objPanel.classList.add("show");
   if (selMulti.length) { buildGroupPanel(); return; }
   if (selectedObj.kind === "shape") buildShapePanel(selectedObj.ref);
@@ -1850,6 +1870,65 @@ function buildShapePanel(s) {
   $("op-side").addEventListener("click", () => { s.side = (s.side||1)*-1; draw(); autosave(); });
   $("op-color").addEventListener("click", () => { s.color = state.color; draw(); autosave(); });
   $("op-bake").addEventListener("click", () => { pushUndo(); const news = bakeShape(s); selectedObj = null; selMulti = news; refreshPanel(); draw(); autosave(); });
+  $("op-del").addEventListener("click", deleteSelected);
+}
+let cellRecolorFrom = null;
+function cellSelColorCounts() {
+  const map = new Map();
+  for (const key of cellSel) {
+    const v = state.cells.get(key);
+    if (v) map.set(v.color, (map.get(v.color) || 0) + 1);
+  }
+  return map;
+}
+function recolorInSelection(from, to) {
+  if (!to || from === to) return;
+  pushUndo();
+  for (const key of cellSel) {
+    const v = state.cells.get(key);
+    if (v && v.color === from) v.color = to;
+  }
+  cellRecolorFrom = null;
+  refreshPanel(); draw(); autosave();
+}
+function buildCellSelPanel() {
+  const $ = id => document.getElementById(id);
+  const counts = cellSelColorCounts();
+  if (cellRecolorFrom && !counts.has(cellRecolorFrom)) cellRecolorFrom = null;
+  let colorsHtml = "";
+  for (const [color, n] of counts) {
+    colorsHtml += '<div class="swatch' + (color === cellRecolorFrom ? " sel" : "") + '" data-color="' + color + '" style="background:' + color + '" title="' + color.toUpperCase() + ' · ' + n + ' ponto(s)"></div>';
+  }
+  let editHtml = "";
+  if (cellRecolorFrom) {
+    let paletteHtml = "";
+    for (const hex of state.palette) {
+      if (hex === cellRecolorFrom) continue;
+      paletteHtml += '<div class="swatch" data-newcolor="' + hex + '" style="background:' + hex + '" title="' + hex.toUpperCase() + '"></div>';
+    }
+    editHtml =
+      '<div style="font-size:11px;color:var(--muted);margin:10px 0 6px;">Trocar por (paleta ou cor livre):</div>'
+      + '<div class="swatches" id="op-cellpalette" style="max-height:88px;">'
+      + paletteHtml
+      + '<label class="current-swatch sm" id="cellCustomSwatch" title="Escolher outra cor (gradiente, pipeta e hex)"><input type="color" id="cellCustomPicker" value="' + state.color + '"></label>'
+      + '</div>';
+  }
+  document.getElementById("cellSelBody").innerHTML =
+    '<div style="font-size:12px;margin-bottom:8px;">' + cellSel.size + ' ponto(s) selecionado(s)</div>'
+    + '<div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Cores nesta área — clique numa para trocar</div>'
+    + '<div class="swatches" id="op-cellcolors" style="max-height:88px;">' + colorsHtml + '</div>'
+    + editHtml
+    + '<div class="op-btns" style="margin-top:10px;"><button id="op-del" class="danger">Excluir seleção</button></div>';
+  $("op-cellcolors").querySelectorAll(".swatch").forEach(sw => sw.addEventListener("click", () => {
+    cellRecolorFrom = (cellRecolorFrom === sw.dataset.color) ? null : sw.dataset.color;
+    refreshPanel();
+  }));
+  if (cellRecolorFrom) {
+    $("op-cellpalette").querySelectorAll(".swatch").forEach(sw => sw.addEventListener("click", () => {
+      recolorInSelection(cellRecolorFrom, sw.dataset.newcolor);
+    }));
+    $("cellCustomPicker").addEventListener("change", e => recolorInSelection(cellRecolorFrom, e.target.value));
+  }
   $("op-del").addEventListener("click", deleteSelected);
 }
 function buildStitchPanel(st) {
@@ -2105,7 +2184,8 @@ document.getElementById("undoBtn").addEventListener("click", undo);
 document.getElementById("redoBtn").addEventListener("click", redo);
 
 // ---------- Exportar / baixar ----------
-function renderExportCanvas() {
+function renderExportCanvas(includeGrid) {
+  if (includeGrid == null) includeGrid = state.showGrid;
   const scale = 20;
   const off = document.createElement("canvas");
   off.width = state.cols * scale; off.height = state.rows * scale;
@@ -2116,7 +2196,7 @@ function renderExportCanvas() {
     g.save(); g.globalAlpha = state.image.opacity!=null?state.image.opacity:1;
     g.drawImage(imgEl, state.image.x*scale, state.image.y*scale, state.image.w*scale, state.image.h*scale); g.restore();
   }
-  if (state.showGrid) {
+  if (includeGrid) {
     g.lineWidth = 1;
     for (let c=0;c<=state.cols;c++){ g.strokeStyle = c%10===0?gc.bold:gc.thin;
       g.beginPath(); g.moveTo(c*scale+.5,0); g.lineTo(c*scale+.5,off.height); g.stroke(); }
@@ -2148,16 +2228,19 @@ document.getElementById("downloadTrigger").addEventListener("click", () => {
   const r = document.getElementById("downloadTrigger").getBoundingClientRect();
   downloadFlyout.style.left = Math.min(r.left, window.innerWidth - 160) + "px";
   downloadFlyout.style.top = (r.bottom + 6) + "px";
+  document.getElementById("exportGridChk").checked = state.showGrid;
   downloadFlyout.classList.toggle("show");
 });
+document.getElementById("exportGridLabel").addEventListener("click", e => e.stopPropagation());
 downloadFlyout.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
   const fmt = b.dataset.fmt;
+  const includeGrid = document.getElementById("exportGridChk").checked;
   downloadFlyout.classList.remove("show");
   if (fmt === "json") {
     downloadURL(URL.createObjectURL(new Blob([JSON.stringify(projectData())], {type:"application/json"})), "projeto.json");
     return;
   }
-  const off = renderExportCanvas();
+  const off = renderExportCanvas(includeGrid);
   if (fmt === "png") downloadURL(off.toDataURL("image/png"), "desenho.png");
   else if (fmt === "jpg") downloadURL(off.toDataURL("image/jpeg", 0.92), "desenho.jpg");
   else if (fmt === "svg") {
