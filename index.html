@@ -1193,17 +1193,16 @@ function doDraw() {
 // ---------- Cell selection overlay (modo ponto cruz) ----------
 // rótulo com fundo, usado nas quinas/arestas da caixa de seleção
 function drawSelLabel(g, text, x, y, hAlign, vAlign) {
-  g.font = "600 11px -apple-system, BlinkMacSystemFont, sans-serif";
-  const padX = 6, boxH = 17;
+  g.font = "500 10px -apple-system, BlinkMacSystemFont, sans-serif";
+  const padX = 5, boxH = 14;
   const tw = g.measureText(text).width;
   const boxW = tw + padX*2;
   let boxX = hAlign === "left" ? x : hAlign === "right" ? x - boxW : x - boxW/2;
   let boxY = vAlign === "top" ? y : vAlign === "bottom" ? y - boxH : y - boxH/2;
-  g.fillStyle = "rgba(30,33,44,0.94)";
-  g.strokeStyle = "rgba(124,156,255,0.9)"; g.lineWidth = 1;
-  if (g.roundRect) { g.beginPath(); g.roundRect(boxX, boxY, boxW, boxH, 5); g.fill(); g.stroke(); }
-  else { g.fillRect(boxX, boxY, boxW, boxH); g.strokeRect(boxX, boxY, boxW, boxH); }
-  g.fillStyle = "#aebfff"; g.textAlign = "left"; g.textBaseline = "middle";
+  g.fillStyle = "rgba(20,22,30,0.68)";
+  if (g.roundRect) { g.beginPath(); g.roundRect(boxX, boxY, boxW, boxH, 4); g.fill(); }
+  else { g.fillRect(boxX, boxY, boxW, boxH); }
+  g.fillStyle = "rgba(185,199,255,0.85)"; g.textAlign = "left"; g.textBaseline = "middle";
   g.fillText(text, boxX + padX, boxY + boxH/2 + 0.5);
 }
 function drawCellSelectionLayer(g, cs) {
@@ -1220,10 +1219,10 @@ function drawCellSelectionLayer(g, cs) {
     g.setLineDash([5,4]); g.strokeStyle = "rgba(124,156,255,0.9)"; g.lineWidth = 1.5;
     g.strokeRect(x0, y0, x1-x0, y1-y0);
     g.setLineDash([]);
-    drawSelLabel(g, "(" + (b.c0+1) + "," + (b.r0+1) + ")", x0+4, y0+4, "left", "top");
-    drawSelLabel(g, "(" + (b.c1+1) + "," + (b.r1+1) + ")", x1-4, y1-4, "right", "bottom");
-    drawSelLabel(g, String(b.c1-b.c0+1), (x0+x1)/2, y0, "center", "middle");
-    drawSelLabel(g, String(b.r1-b.r0+1), x0, (y0+y1)/2, "center", "middle");
+    drawSelLabel(g, "(" + (b.c0+1) + "," + (b.r0+1) + ")", x0-5, y0-5, "right", "bottom");
+    drawSelLabel(g, "(" + (b.c1+1) + "," + (b.r1+1) + ")", x1+5, y1+5, "left", "top");
+    drawSelLabel(g, String(b.c1-b.c0+1), (x0+x1)/2, y0-9, "center", "middle");
+    drawSelLabel(g, String(b.r1-b.r0+1), x0-9, (y0+y1)/2, "center", "middle");
   }
   if (cellMarquee) {
     const x = Math.min(cellMarquee.x0,cellMarquee.x1)*cs, y = Math.min(cellMarquee.y0,cellMarquee.y1)*cs;
@@ -1470,6 +1469,14 @@ function cellSelectDown(p, e) {
   }
   if (hasStitch && cellSel.has(key)) {
     pushUndo(); cellDrag = { lc: p.c, lr: p.r }; drawing = true; return;
+  }
+  // clicar dentro da caixa da seleção atual (mesmo numa célula vazia, em seleções
+  // esparsas) também arrasta o grupo — não precisa acertar exatamente um ponto
+  if (!shift && cellSel.size) {
+    const b = cellSelBounds(cellSel);
+    if (p.c >= b.c0 && p.c <= b.c1 && p.r >= b.r0 && p.r <= b.r1) {
+      pushUndo(); cellDrag = { lc: p.c, lr: p.r }; drawing = true; return;
+    }
   }
   if (hasStitch) {
     if (!shift) { cellSel.clear(); cellRecolorFrom = null; }
